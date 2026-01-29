@@ -1,16 +1,194 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import type { Server } from "http";
 import { storage } from "./storage";
+import { api } from "@shared/routes";
+import { z } from "zod";
+import { insertEmployeeSchema, insertTemplateSchema, insertRuleSchema, insertAdjustmentSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  // Employees
+  app.get(api.employees.list.path, async (req, res) => {
+    const employees = await storage.getEmployees();
+    res.json(employees);
+  });
+
+  app.post(api.employees.create.path, async (req, res) => {
+    try {
+      const input = api.employees.create.input.parse(req.body);
+      const employee = await storage.createEmployee(input);
+      res.status(201).json(employee);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.get(api.employees.get.path, async (req, res) => {
+    const employee = await storage.getEmployee(Number(req.params.id));
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    res.json(employee);
+  });
+
+  app.put(api.employees.update.path, async (req, res) => {
+    try {
+      const input = api.employees.update.input.parse(req.body);
+      const employee = await storage.updateEmployee(Number(req.params.id), input);
+      res.json(employee);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
+  // Templates
+  app.get(api.templates.list.path, async (req, res) => {
+    const templates = await storage.getTemplates();
+    res.json(templates);
+  });
+
+  app.post(api.templates.create.path, async (req, res) => {
+    try {
+      const input = api.templates.create.input.parse(req.body);
+      const template = await storage.createTemplate(input);
+      res.status(201).json(template);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input" });
+      }
+      throw err;
+    }
+  });
+
+  app.delete(api.templates.delete.path, async (req, res) => {
+    await storage.deleteTemplate(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Rules
+  app.get(api.rules.list.path, async (req, res) => {
+    const rules = await storage.getRules();
+    res.json(rules);
+  });
+
+  app.post(api.rules.create.path, async (req, res) => {
+    try {
+      const input = api.rules.create.input.parse(req.body);
+      const rule = await storage.createRule(input);
+      res.status(201).json(rule);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  app.delete(api.rules.delete.path, async (req, res) => {
+    await storage.deleteRule(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Adjustments
+  app.get(api.adjustments.list.path, async (req, res) => {
+    const adjustments = await storage.getAdjustments();
+    res.json(adjustments);
+  });
+
+  app.post(api.adjustments.create.path, async (req, res) => {
+    try {
+      const input = api.adjustments.create.input.parse(req.body);
+      const adj = await storage.createAdjustment(input);
+      res.status(201).json(adj);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  // Attendance
+  app.get(api.attendance.list.path, async (req, res) => {
+    const { startDate, endDate, employeeCode } = req.query;
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: "Start and End dates required" });
+    }
+    const attendance = await storage.getAttendance(String(startDate), String(endDate), employeeCode as string);
+    res.json(attendance);
+  });
+
+  app.post(api.attendance.process.path, async (req, res) => {
+    const { startDate, endDate } = req.body;
+    // Mock processing for now - in real app would calculate punches
+    // This is where the complex logic from the spec would go
+    res.json({ message: "Processing started", processedCount: 0 });
+  });
+
+  // Import
+  app.post(api.import.punches.path, async (req, res) => {
+    const punches = req.body;
+    const result = await storage.createPunchesBulk(punches);
+    res.json({ message: "Imported punches", count: result.length });
+  });
+
+  app.post(api.import.employees.path, async (req, res) => {
+    const employees = req.body;
+    const result = await storage.createEmployeesBulk(employees);
+    res.json({ message: "Imported employees", count: result.length });
+  });
+
+  // Seeding
+  const employees = await storage.getEmployees();
+  if (employees.length === 0) {
+    console.log("Seeding database...");
+    await storage.createEmployee({
+      code: "EMP001",
+      nameAr: "أحمد محمد",
+      department: "IT",
+      section: "Development",
+      hireDate: "2023-01-01",
+      shiftStart: "09:00"
+    });
+    await storage.createEmployee({
+      code: "EMP002",
+      nameAr: "سارة علي",
+      department: "HR",
+      section: "Recruitment",
+      hireDate: "2023-02-15",
+      shiftStart: "08:30"
+    });
+    await storage.createEmployee({
+      code: "EMP003",
+      nameAr: "محمود حسن",
+      department: "Sales",
+      section: "Field",
+      hireDate: "2023-03-10",
+      shiftStart: "10:00"
+    });
+    
+    // Seed Rules
+    await storage.createRule({
+      name: "رمضان - تخفيض ساعات",
+      priority: 1,
+      scope: "all",
+      startDate: "2024-03-10",
+      endDate: "2024-04-09",
+      ruleType: "custom_shift",
+      params: { shiftStart: "10:00", shiftEnd: "15:00" }
+    });
+
+    console.log("Database seeded!");
+  }
 
   return httpServer;
 }
