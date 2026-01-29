@@ -63,10 +63,10 @@ export default function Import() {
       } else {
         const mapped = previewData.map((row: any) => {
           // Try to find employee code
-          const employeeCode = String(row['ID'] || row['Code'] || row['الكود'] || row['id'] || row['Employee ID'] || "");
+          const employeeCode = String(row['كود'] || row['ID'] || row['Code'] || row['الكود'] || row['id'] || row['Employee ID'] || "");
           
           // Try to find date/time
-          const rawDate = row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time'] || row['date'] || row['time'] || row['التاريخ'] || row['الوقت'];
+          const rawDate = row['التاريخ_والوقت'] || row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time'] || row['date'] || row['time'] || row['التاريخ'] || row['الوقت'];
           
           let punchDatetime: Date;
           if (rawDate instanceof Date) {
