@@ -22,13 +22,25 @@ export default function Import() {
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
-      setPreviewData(data);
-      toast({ title: "تم قراءة الملف", description: `تم العثور على ${data.length} سجل` });
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        console.log("Excel Preview Data:", data[0]); // Debug first row
+        
+        if (data.length === 0) {
+          toast({ title: "تنبيه", description: "الملف فارغ", variant: "destructive" });
+          return;
+        }
+        
+        setPreviewData(data);
+        toast({ title: "تم قراءة الملف", description: `تم العثور على ${data.length} سجل` });
+      } catch (err: any) {
+        toast({ title: "خطأ في قراءة الملف", description: err.message, variant: "destructive" });
+      }
     };
     reader.readAsBinaryString(file);
   };
@@ -39,26 +51,37 @@ export default function Import() {
     
     try {
       if (activeTab === "employees") {
-        // Map excel columns to schema
         const mapped = previewData.map((row: any) => ({
-          code: String(row['الكود'] || row['Code']),
-          nameAr: String(row['الاسم'] || row['Name']),
-          department: String(row['القسم'] || row['Department'] || ""),
-          shiftStart: String(row['بداية الوردية'] || row['ShiftStart'] || "09:00"),
-        }));
+          code: String(row['الكود'] || row['Code'] || row['ID'] || row['id'] || ""),
+          nameAr: String(row['الاسم'] || row['Name'] || row['name'] || ""),
+          department: String(row['القسم'] || row['Department'] || row['dept'] || ""),
+          shiftStart: String(row['بداية الوردية'] || row['ShiftStart'] || row['shift'] || "09:00"),
+        })).filter(emp => emp.code && emp.nameAr);
+
+        if (mapped.length === 0) throw new Error("لم يتم العثور على بيانات موظفين صالحة. تأكد من وجود أعمدة (ID, Name)");
         await importEmployees.mutateAsync(mapped);
       } else {
         const mapped = previewData.map((row: any) => {
-          const employeeCode = String(row['ID'] || row['Code'] || row['الكود'] || row['id'] || "");
-          const rawDate = row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time'] || row['date'] || row['time'];
-          let punchDatetime = new Date(rawDate);
+          // Try to find employee code
+          const employeeCode = String(row['ID'] || row['Code'] || row['الكود'] || row['id'] || row['Employee ID'] || "");
+          
+          // Try to find date/time
+          const rawDate = row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time'] || row['date'] || row['time'] || row['التاريخ'] || row['الوقت'];
+          
+          let punchDatetime: Date;
+          if (rawDate instanceof Date) {
+            punchDatetime = rawDate;
+          } else {
+            punchDatetime = new Date(rawDate);
+          }
           
           return {
             employeeCode,
             punchDatetime,
           };
         }).filter(p => p.employeeCode && !isNaN(p.punchDatetime.getTime()));
-        
+
+        if (mapped.length === 0) throw new Error("لم يتم العثور على سجلات بصمة صالحة. تأكد من وجود أعمدة (ID, Clock In)");
         await importPunches.mutateAsync(mapped);
       }
       

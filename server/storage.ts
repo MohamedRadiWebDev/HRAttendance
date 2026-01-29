@@ -158,10 +158,17 @@ export class DatabaseStorage implements IStorage {
 
   // Bulk
   async createEmployeesBulk(insertEmployees: InsertEmployee[]): Promise<Employee[]> {
-    return await db.insert(employees).values(insertEmployees).returning();
+    if (insertEmployees.length === 0) return [];
+    // Handle potential duplicate codes by skipping or updating
+    // For simplicity, we filter out existing ones or use onConflictDoNothing
+    return await db.insert(employees)
+      .values(insertEmployees)
+      .onConflictDoNothing({ target: employees.code })
+      .returning();
   }
 
   async createPunchesBulk(insertPunches: InsertBiometricPunch[]): Promise<BiometricPunch[]> {
+    if (insertPunches.length === 0) return [];
     return await db.insert(biometricPunches).values(insertPunches).returning();
   }
 }
