@@ -129,9 +129,62 @@ export async function registerRoutes(
 
   app.post(api.attendance.process.path, async (req, res) => {
     const { startDate, endDate } = req.body;
-    // Mock processing for now - in real app would calculate punches
-    // This is where the complex logic from the spec would go
-    res.json({ message: "Processing started", processedCount: 0 });
+    try {
+      const allEmployees = await storage.getEmployees();
+      const punches = await storage.getPunches(new Date(startDate), new Date(endDate));
+      
+      let processedCount = 0;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      for (const employee of allEmployees) {
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          const dayPunches = punches.filter(p => 
+            p.employeeCode === employee.code && 
+            p.punchDatetime.toISOString().split('T')[0] === dateStr
+          ).sort((a, b) => a.punchDatetime.getTime() - b.punchDatetime.getTime());
+
+          if (dayPunches.length > 0) {
+            const checkIn = dayPunches[0].punchDatetime;
+            const checkOut = dayPunches.length > 1 ? dayPunches[dayPunches.length - 1].punchDatetime : null;
+            
+            let totalHours = 0;
+            if (checkIn && checkOut) {
+              totalHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+            }
+
+            // Simple status logic
+            let status = "Present";
+            const shiftStartParts = (employee.shiftStart || "09:00").split(':');
+            const shiftStart = new Date(d);
+            shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
+            
+            if (checkIn > shiftStart) {
+              status = "Late";
+            }
+
+            await storage.createAttendanceRecord({
+              employeeCode: employee.code,
+              date: dateStr,
+              checkIn,
+              checkOut,
+              totalHours,
+              status,
+              overtimeHours: Math.max(0, totalHours - 8),
+              penalties: [],
+              isOvernight: false
+            });
+            processedCount++;
+          }
+        }
+      }
+
+      res.json({ message: "Processing completed", processedCount });
+    } catch (err: any) {
+      console.error("Processing Error:", err);
+      res.status(500).json({ message: "Failed to process attendance", error: err.message });
+    }
   });
 
   // Import

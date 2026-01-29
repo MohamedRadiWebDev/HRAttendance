@@ -147,6 +147,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAttendanceRecord(insertRecord: InsertAttendanceRecord): Promise<AttendanceRecord> {
+    // Check if record already exists to avoid duplicates
+    const [existing] = await db.select()
+      .from(attendanceRecords)
+      .where(
+        and(
+          eq(attendanceRecords.employeeCode, insertRecord.employeeCode),
+          eq(attendanceRecords.date, insertRecord.date)
+        )
+      );
+
+    if (existing) {
+      const [updated] = await db.update(attendanceRecords)
+        .set(insertRecord)
+        .where(eq(attendanceRecords.id, existing.id))
+        .returning();
+      return updated;
+    }
+
     const [record] = await db.insert(attendanceRecords).values(insertRecord).returning();
     return record;
   }
