@@ -132,6 +132,8 @@ export async function registerRoutes(
     try {
       const allEmployees = await storage.getEmployees();
       const punches = await storage.getPunches(new Date(startDate), new Date(endDate));
+      const rules = await storage.getRules();
+      const adjustments = await storage.getAdjustments();
       
       let processedCount = 0;
       const start = new Date(startDate);
@@ -140,13 +142,45 @@ export async function registerRoutes(
       for (const employee of allEmployees) {
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           const dateStr = d.toISOString().split('T')[0];
+          
+          // 1. Get applicable rules for this employee and date
+          const activeRules = rules.filter(r => {
+            const ruleStart = new Date(r.startDate);
+            const ruleEnd = new Date(r.endDate);
+            const current = new Date(dateStr);
+            if (current < ruleStart || current > ruleEnd) return false;
+            
+            if (r.scope === 'all') return true;
+            if (r.scope.startsWith('dept:') && employee.department === r.scope.replace('dept:', '')) return true;
+            if (r.scope.startsWith('sector:') && employee.sector === r.scope.replace('sector:', '')) return true;
+            if (r.scope.startsWith('emp:') && employee.code === r.scope.replace('emp:', '')) return true;
+            return false;
+          }).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
+          // 2. Determine shift times based on rules or employee default
+          let currentShiftStart = employee.shiftStart || "09:00";
+          let currentShiftEnd = "17:00"; // Default 8 hours
+          
+          const shiftRule = activeRules.find(r => r.ruleType === 'custom_shift');
+          if (shiftRule) {
+            currentShiftStart = (shiftRule.params as any).shiftStart || currentShiftStart;
+            currentShiftEnd = (shiftRule.params as any).shiftEnd || currentShiftEnd;
+          }
+
+          // 3. Check for leaves/adjustments
+          const activeAdj = adjustments.find(a => 
+            a.employeeCode === employee.code && 
+            dateStr >= a.startDate && 
+            dateStr <= a.endDate
+          );
+
           const dayPunches = punches.filter(p => 
             p.employeeCode === employee.code && 
             p.punchDatetime.toISOString().split('T')[0] === dateStr
           ).sort((a, b) => a.punchDatetime.getTime() - b.punchDatetime.getTime());
 
-          if (dayPunches.length > 0) {
-            const checkIn = dayPunches[0].punchDatetime;
+          if (dayPunches.length > 0 || activeAdj) {
+            const checkIn = dayPunches.length > 0 ? dayPunches[0].punchDatetime : null;
             const checkOut = dayPunches.length > 1 ? dayPunches[dayPunches.length - 1].punchDatetime : null;
             
             let totalHours = 0;
@@ -154,14 +188,15 @@ export async function registerRoutes(
               totalHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
             }
 
-            // Simple status logic
-            let status = "Present";
-            const shiftStartParts = (employee.shiftStart || "09:00").split(':');
+            let status = activeAdj ? "Excused" : "Present";
+            const shiftStartParts = currentShiftStart.split(':');
             const shiftStart = new Date(d);
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
             
-            if (checkIn > shiftStart) {
+            if (!activeAdj && checkIn && checkIn > shiftStart) {
               status = "Late";
+            } else if (!activeAdj && !checkIn) {
+              status = "Absent";
             }
 
             await storage.createAttendanceRecord({
@@ -172,6 +207,20 @@ export async function registerRoutes(
               totalHours,
               status,
               overtimeHours: Math.max(0, totalHours - 8),
+              penalties: [],
+              isOvernight: activeRules.some(r => r.ruleType === 'overtime_overnight')
+            });
+            processedCount++;
+          } else {
+            // Absent
+             await storage.createAttendanceRecord({
+              employeeCode: employee.code,
+              date: dateStr,
+              checkIn: null,
+              checkOut: null,
+              totalHours: 0,
+              status: "Absent",
+              overtimeHours: 0,
               penalties: [],
               isOvernight: false
             });
@@ -209,46 +258,9 @@ export async function registerRoutes(
   });
 
   // Seeding
-  const employees = await storage.getEmployees();
-  if (employees.length === 0) {
-    console.log("Seeding database...");
-    await storage.createEmployee({
-      code: "EMP001",
-      nameAr: "أحمد محمد",
-      department: "IT",
-      section: "Development",
-      hireDate: "2023-01-01",
-      shiftStart: "09:00"
-    });
-    await storage.createEmployee({
-      code: "EMP002",
-      nameAr: "سارة علي",
-      department: "HR",
-      section: "Recruitment",
-      hireDate: "2023-02-15",
-      shiftStart: "08:30"
-    });
-    await storage.createEmployee({
-      code: "EMP003",
-      nameAr: "محمود حسن",
-      department: "Sales",
-      section: "Field",
-      hireDate: "2023-03-10",
-      shiftStart: "10:00"
-    });
-    
-    // Seed Rules
-    await storage.createRule({
-      name: "رمضان - تخفيض ساعات",
-      priority: 1,
-      scope: "all",
-      startDate: "2024-03-10",
-      endDate: "2024-04-09",
-      ruleType: "custom_shift",
-      params: { shiftStart: "10:00", shiftEnd: "15:00" }
-    });
-
-    console.log("Database seeded!");
+  const employeesCount = await storage.getEmployees();
+  if (employeesCount.length === 0) {
+    console.log("Database is empty. Ready for import.");
   }
 
   return httpServer;

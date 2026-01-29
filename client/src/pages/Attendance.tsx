@@ -3,7 +3,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar as CalendarIcon, RefreshCw, Download } from "lucide-react";
+import { Calendar as CalendarIcon, RefreshCw, Download, Search } from "lucide-react";
 import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -15,8 +15,9 @@ export default function Attendance() {
     start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
     end: format(endOfMonth(new Date()), "yyyy-MM-dd")
   });
+  const [employeeFilter, setEmployeeFilter] = useState("");
   
-  const { data: records, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end);
+  const { data: records, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter);
   const processAttendance = useProcessAttendance();
   const { toast } = useToast();
 
@@ -60,6 +61,15 @@ export default function Attendance() {
                     value={dateRange.end}
                     onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                     className="border-none bg-transparent h-8 w-36"
+                  />
+                </div>
+                <div className="relative w-64">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="بحث بالأكواد (101, 102)..." 
+                    className="pr-10 h-10"
+                    value={employeeFilter}
+                    onChange={(e) => setEmployeeFilter(e.target.value)}
                   />
                 </div>
               </div>
@@ -118,7 +128,7 @@ export default function Attendance() {
                             <div className="flex gap-1">
                               {(record.penalties as any[]).map((p: any, i: number) => (
                                 <span key={i} className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs">
-                                  {p.type}
+                                  {typeof p === 'object' ? String(p.type || JSON.stringify(p)) : String(p)}
                                 </span>
                               ))}
                             </div>

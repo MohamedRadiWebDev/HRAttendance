@@ -7,7 +7,7 @@ import {
   attendanceRecords, type AttendanceRecord, type InsertAttendanceRecord
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Employees
@@ -138,10 +138,16 @@ export class DatabaseStorage implements IStorage {
 
   // Attendance
   async getAttendance(startDate: string, endDate: string, employeeCode?: string): Promise<AttendanceRecord[]> {
-    // Note: startDate and endDate are strings YYYY-MM-DD
     let conditions = [gte(attendanceRecords.date, startDate), lte(attendanceRecords.date, endDate)];
     if (employeeCode) {
-      conditions.push(eq(attendanceRecords.employeeCode, employeeCode));
+      if (employeeCode.includes(',')) {
+        const codes = employeeCode.split(',').map(c => c.trim()).filter(c => c !== "");
+        if (codes.length > 0) {
+          conditions.push(inArray(attendanceRecords.employeeCode, codes));
+        }
+      } else {
+        conditions.push(eq(attendanceRecords.employeeCode, employeeCode.trim()));
+      }
     }
     return await db.select().from(attendanceRecords).where(and(...conditions));
   }

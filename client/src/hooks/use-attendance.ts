@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type InsertBiometricPunch } from "@shared/routes";
+import { api } from "@shared/routes";
 import { format } from "date-fns";
+import { apiRequest } from "@/lib/queryClient";
+import type { AttendanceRecord, InsertBiometricPunch } from "@shared/schema";
 
 export function useAttendanceRecords(startDate?: string, endDate?: string, employeeCode?: string) {
   // Default to current month if no dates provided
