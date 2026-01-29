@@ -136,9 +136,17 @@ export async function registerRoutes(
 
   // Import
   app.post(api.import.punches.path, async (req, res) => {
-    const punches = req.body;
-    const result = await storage.createPunchesBulk(punches);
-    res.json({ message: "Imported punches", count: result.length });
+    try {
+      const punches = z.array(z.object({
+        employeeCode: z.string(),
+        punchDatetime: z.string().transform(val => new Date(val)),
+      })).parse(req.body);
+      const result = await storage.createPunchesBulk(punches);
+      res.json({ message: "Imported punches", count: result.length });
+    } catch (err) {
+      console.error("Import Punches Error:", err);
+      res.status(400).json({ message: "Invalid punch data format" });
+    }
   });
 
   app.post(api.import.employees.path, async (req, res) => {

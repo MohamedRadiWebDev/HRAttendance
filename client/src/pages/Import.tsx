@@ -71,15 +71,27 @@ export default function Import() {
           let punchDatetime: Date;
           if (rawDate instanceof Date) {
             punchDatetime = rawDate;
+          } else if (typeof rawDate === 'string') {
+            // Handle common DD/MM/YYYY format if new Date() fails
+            const parts = rawDate.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})(\s+AM|\s+PM)?/i);
+            if (parts) {
+              let [_, day, month, year, hours, minutes, ampm] = parts;
+              let h = parseInt(hours);
+              if (ampm && ampm.trim().toUpperCase() === 'PM' && h < 12) h += 12;
+              if (ampm && ampm.trim().toUpperCase() === 'AM' && h === 12) h = 0;
+              punchDatetime = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), h, parseInt(minutes));
+            } else {
+              punchDatetime = new Date(rawDate);
+            }
           } else {
             punchDatetime = new Date(rawDate);
           }
           
           return {
             employeeCode,
-            punchDatetime,
+            punchDatetime: punchDatetime.toISOString(), // Send as string to avoid toISOString error on server
           };
-        }).filter(p => p.employeeCode && !isNaN(p.punchDatetime.getTime()));
+        }).filter(p => p.employeeCode && p.punchDatetime && p.punchDatetime !== "Invalid Date");
 
         if (mapped.length === 0) throw new Error("لم يتم العثور على سجلات بصمة صالحة. تأكد من وجود أعمدة (ID, Clock In)");
         await importPunches.mutateAsync(mapped);
