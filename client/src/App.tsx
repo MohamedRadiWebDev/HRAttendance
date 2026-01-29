@@ -8,6 +8,9 @@ import Dashboard from "@/pages/Dashboard";
 import Employees from "@/pages/Employees";
 import Attendance from "@/pages/Attendance";
 import Import from "@/pages/Import";
+import Rules from "@/pages/Rules";
+import Templates from "@/pages/Templates";
+import Adjustments from "@/pages/Adjustments";
 
 function Router() {
   return (
@@ -16,9 +19,9 @@ function Router() {
       <Route path="/employees" component={Employees} />
       <Route path="/attendance" component={Attendance} />
       <Route path="/import" component={Import} />
-      <Route path="/rules" component={() => <div className="p-8 text-center text-xl text-muted-foreground">صفحة القواعد (قيد التطوير)</div>} />
-      <Route path="/templates" component={() => <div className="p-8 text-center text-xl text-muted-foreground">صفحة النماذج (قيد التطوير)</div>} />
-      <Route path="/adjustments" component={() => <div className="p-8 text-center text-xl text-muted-foreground">صفحة التسويات (قيد التطوير)</div>} />
+      <Route path="/rules" component={Rules} />
+      <Route path="/templates" component={Templates} />
+      <Route path="/adjustments" component={Adjustments} />
       <Route component={NotFound} />
     </Switch>
   );
