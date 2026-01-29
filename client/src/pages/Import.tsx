@@ -48,10 +48,17 @@ export default function Import() {
         }));
         await importEmployees.mutateAsync(mapped);
       } else {
-        const mapped = previewData.map((row: any) => ({
-          employeeCode: String(row['ID'] || row['Code'] || row['الكود']),
-          punchDatetime: new Date(row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time']),
-        }));
+        const mapped = previewData.map((row: any) => {
+          const employeeCode = String(row['ID'] || row['Code'] || row['الكود'] || row['id'] || "");
+          const rawDate = row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time'] || row['date'] || row['time'];
+          let punchDatetime = new Date(rawDate);
+          
+          return {
+            employeeCode,
+            punchDatetime,
+          };
+        }).filter(p => p.employeeCode && !isNaN(p.punchDatetime.getTime()));
+        
         await importPunches.mutateAsync(mapped);
       }
       

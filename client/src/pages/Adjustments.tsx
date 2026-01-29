@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertAdjustmentSchema, LEAVE_TYPES } from "@shared/schema";
+import { insertAdjustmentSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Adjustments() {
