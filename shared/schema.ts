@@ -11,11 +11,25 @@ export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
   nameAr: text("name_ar").notNull(),
+  sector: text("sector"),
   department: text("department"),
   section: text("section"),
-  hireDate: text("hire_date"), // Storing as text YYYY-MM-DD for simplicity or date
+  jobTitle: text("job_title"),
+  branch: text("branch"),
+  governorate: text("governorate"),
+  hireDate: text("hire_date"),
   terminationDate: text("termination_date"),
-  shiftStart: text("shift_start").default("09:00"), // HH:mm
+  terminationReason: text("termination_reason"),
+  serviceDuration: text("service_duration"),
+  directManager: text("direct_manager"),
+  deptManager: text("dept_manager"),
+  nationalId: text("national_id"),
+  birthDate: text("birth_date"),
+  address: text("address"),
+  birthPlace: text("birth_place"),
+  personalPhone: text("personal_phone"),
+  emergencyPhone: text("emergency_phone"),
+  shiftStart: text("shift_start").default("09:00"),
 });
 
 export const biometricPunches = pgTable("biometric_punches", {

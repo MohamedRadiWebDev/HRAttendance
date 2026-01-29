@@ -68,20 +68,21 @@ export default function Employees() {
               <table className="w-full text-sm text-right">
                 <thead className="bg-slate-50 text-muted-foreground font-medium">
                   <tr>
-                    <th className="px-6 py-4">الكود</th>
+                    <th className="px-6 py-4">كود</th>
                     <th className="px-6 py-4">الاسم</th>
-                    <th className="px-6 py-4">القسم</th>
+                    <th className="px-6 py-4">القطاع</th>
+                    <th className="px-6 py-4">الادارة</th>
+                    <th className="px-6 py-4">الوظيفة</th>
                     <th className="px-6 py-4">تاريخ التعيين</th>
-                    <th className="px-6 py-4">بداية الوردية</th>
-                    <th className="px-6 py-4">الحالة</th>
+                    <th className="px-6 py-4">التليفون</th>
                     <th className="px-6 py-4">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
                   {isLoading ? (
-                    <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">جاري التحميل...</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">جاري التحميل...</td></tr>
                   ) : filteredEmployees?.length === 0 ? (
-                    <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">لا يوجد موظفين</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا يوجد موظفين</td></tr>
                   ) : (
                     filteredEmployees?.map((employee) => (
                       <tr key={employee.id} className="hover:bg-slate-50/50 transition-colors">
@@ -89,20 +90,13 @@ export default function Employees() {
                         <td className="px-6 py-4 font-medium">{employee.nameAr}</td>
                         <td className="px-6 py-4">
                           <span className="px-2 py-1 rounded-md bg-slate-100 text-xs font-medium text-slate-600">
-                            {employee.department || "عام"}
+                            {employee.sector || "-"}
                           </span>
                         </td>
+                        <td className="px-6 py-4">{employee.department || "-"}</td>
+                        <td className="px-6 py-4">{employee.jobTitle || "-"}</td>
                         <td className="px-6 py-4 text-muted-foreground">{employee.hireDate || "-"}</td>
-                        <td className="px-6 py-4 font-mono" dir="ltr">{employee.shiftStart}</td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            employee.terminationDate 
-                              ? "bg-red-100 text-red-800" 
-                              : "bg-green-100 text-green-800"
-                          }`}>
-                            {employee.terminationDate ? "منتهي الخدمة" : "نشط"}
-                          </span>
-                        </td>
+                        <td className="px-6 py-4" dir="ltr">{employee.personalPhone || "-"}</td>
                         <td className="px-6 py-4">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast({ title: "معلومات", description: `عرض تفاصيل الموظف: ${employee.nameAr}` })}>
                             <MoreHorizontal className="w-4 h-4" />

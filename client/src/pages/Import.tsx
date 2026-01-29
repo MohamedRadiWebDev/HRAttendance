@@ -52,13 +52,30 @@ export default function Import() {
     try {
       if (activeTab === "employees") {
         const mapped = previewData.map((row: any) => ({
-          code: String(row['الكود'] || row['Code'] || row['ID'] || row['id'] || ""),
-          nameAr: String(row['الاسم'] || row['Name'] || row['name'] || ""),
-          department: String(row['القسم'] || row['Department'] || row['dept'] || ""),
-          shiftStart: String(row['بداية الوردية'] || row['ShiftStart'] || row['shift'] || "09:00"),
+          code: String(row['كود'] || row['Code'] || row['ID'] || ""),
+          nameAr: String(row['الاسم'] || row['Name'] || ""),
+          sector: String(row['القطاع'] || row['Sector'] || ""),
+          department: String(row['الادارة'] || row['Department'] || ""),
+          section: String(row['القسم'] || row['Section'] || ""),
+          jobTitle: String(row['الوظيفة'] || row['Job Title'] || ""),
+          branch: String(row['الفرع'] || row['Branch'] || ""),
+          governorate: String(row['المحافظة'] || row['Governorate'] || ""),
+          hireDate: String(row['تاريخ التعيين'] || row['Hire Date'] || ""),
+          terminationDate: String(row['تاريخ ترك العمل'] || row['Termination Date'] || ""),
+          terminationReason: String(row['سبب ترك العمل'] || row['Termination Reason'] || ""),
+          serviceDuration: String(row['بيان مدة الخدمة'] || row['Service Duration'] || ""),
+          directManager: String(row['اسم المدير المباشر'] || row['Direct Manager'] || ""),
+          deptManager: String(row['مدير الادارة'] || row['Dept Manager'] || ""),
+          nationalId: String(row['الرقم القومى'] || row['National ID'] || ""),
+          birthDate: String(row['تاريخ الميلاد'] || row['Birth Date'] || ""),
+          address: String(row['العنوان'] || row['Address'] || ""),
+          birthPlace: String(row['محل الميلاد'] || row['Birth Place'] || ""),
+          personalPhone: String(row['التليفون الشخصى'] || row['Personal Phone'] || ""),
+          emergencyPhone: String(row['تليفون طوارئ'] || row['Emergency Phone'] || ""),
+          shiftStart: "09:00",
         })).filter(emp => emp.code && emp.nameAr);
 
-        if (mapped.length === 0) throw new Error("لم يتم العثور على بيانات موظفين صالحة. تأكد من وجود أعمدة (ID, Name)");
+        if (mapped.length === 0) throw new Error("لم يتم العثور على بيانات موظفين صالحة. تأكد من وجود أعمدة (كود، الاسم)");
         await importEmployees.mutateAsync(mapped);
       } else {
         const mapped = previewData.map((row: any) => {
