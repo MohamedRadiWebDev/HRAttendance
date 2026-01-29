@@ -1,10 +1,18 @@
+import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileSpreadsheet, Plus, Trash2, Download } from "lucide-react";
-import { useTemplates, useDeleteTemplate } from "@/hooks/use-data";
+import { useTemplates, useDeleteTemplate, useCreateTemplate } from "@/hooks/use-data";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertTemplateSchema } from "@shared/schema";
 
 export default function Templates() {
   const { data: templates, isLoading } = useTemplates();
@@ -29,10 +37,7 @@ export default function Templates() {
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold font-display">إدارة القوالب والنماذج</h2>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />
-                إنشاء نموذج جديد
-              </Button>
+              <AddTemplateDialog />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -69,5 +74,100 @@ export default function Templates() {
         </main>
       </div>
     </div>
+  );
+}
+
+function AddTemplateDialog() {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  const createTemplate = useCreateTemplate();
+  
+  const form = useForm({
+    resolver: zodResolver(insertTemplateSchema),
+    defaultValues: {
+      name: "",
+      type: "attendance",
+      mapping: {},
+    }
+  });
+
+  const onSubmit = (data: any) => {
+    // Basic mapping for now, in real app would use a column builder
+    const defaultMapping = {
+      "Code": "employeeCode",
+      "Name": "nameAr",
+      "Date": "date",
+      "Time": "punchDatetime"
+    };
+    createTemplate.mutate({ ...data, mapping: defaultMapping }, {
+      onSuccess: () => {
+        toast({ title: "تم الحفظ", description: "تم إنشاء النموذج بنجاح" });
+        setOpen(false);
+        form.reset();
+      },
+      onError: (err) => {
+        toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="gap-2">
+          <Plus className="w-4 h-4" />
+          إنشاء نموذج جديد
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>إنشاء نموذج إكسل جديد</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>اسم النموذج</FormLabel>
+                  <FormControl>
+                    <Input placeholder="مثال: نموذج حضور البصمة" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>نوع النموذج</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر النوع" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="attendance">حضور وانصراف</SelectItem>
+                      <SelectItem value="summary">ملخص شهري</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="bg-slate-50 p-4 rounded-lg border text-sm text-muted-foreground">
+              سيتم إنشاء تعيين تلقائي للأعمدة الأساسية (Code, Name, Date, Time). يمكنك تعديلها لاحقاً.
+            </div>
+            <Button type="submit" className="w-full" disabled={createTemplate.isPending}>
+              {createTemplate.isPending ? "جاري الحفظ..." : "حفظ النموذج"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
