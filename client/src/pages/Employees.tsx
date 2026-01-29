@@ -104,7 +104,7 @@ export default function Employees() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast({ title: "معلومات", description: `عرض تفاصيل الموظف: ${employee.nameAr}` })}>
                             <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </td>

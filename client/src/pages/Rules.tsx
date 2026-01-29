@@ -66,7 +66,7 @@ export default function Rules() {
                         <Button variant="ghost" size="icon" onClick={() => handleDelete(rule.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => toast({ title: "معلومات", description: "فحص حالة القاعدة وتطبيقها" })}>
                           <ShieldCheck className="w-4 h-4 text-primary" />
                         </Button>
                       </div>

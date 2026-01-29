@@ -66,7 +66,7 @@ export default function Adjustments() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm" className="gap-2 text-primary hover:text-primary hover:bg-primary/10">
+                        <Button variant="ghost" size="sm" className="gap-2 text-primary hover:text-primary hover:bg-primary/10" onClick={() => toast({ title: "معلومات", description: "عرض تفاصيل الطلب والمرفقات" })}>
                           <FileText className="w-4 h-4" />
                           عرض
                         </Button>

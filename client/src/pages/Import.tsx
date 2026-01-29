@@ -49,8 +49,8 @@ export default function Import() {
         await importEmployees.mutateAsync(mapped);
       } else {
         const mapped = previewData.map((row: any) => ({
-          employeeCode: String(row['Code'] || row['الكود']),
-          punchDatetime: new Date(row['Date'] || row['Time']), // Simplified
+          employeeCode: String(row['ID'] || row['Code'] || row['الكود']),
+          punchDatetime: new Date(row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time']),
         }));
         await importPunches.mutateAsync(mapped);
       }
@@ -147,8 +147,8 @@ export default function Import() {
               <div>
                 <h4 className="font-bold text-blue-800 mb-1">تعليمات الاستيراد</h4>
                 <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
-                  <li>تأكد من مطابقة أسماء الأعمدة (Code, Name, Date, Time)</li>
-                  <li>صيغة التاريخ يجب أن تكون YYYY-MM-DD</li>
+                  <li>تأكد من مطابقة أسماء الأعمدة (ID, Name, Date, Clock In, Clock Out)</li>
+                  <li>صيغة التاريخ والوقت يجب أن تكون واضحة للنظام</li>
                   <li>الملفات المدعومة هي .xlsx و .xls فقط</li>
                 </ul>
               </div>

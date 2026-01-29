@@ -51,7 +51,7 @@ export default function Dashboard() {
             <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-border/50 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold font-display">إحصائيات الحضور الأسبوعية</h3>
-                <button className="text-sm text-primary font-medium hover:underline flex items-center gap-1">
+                <button className="text-sm text-primary font-medium hover:underline flex items-center gap-1" onClick={() => window.location.href = '/attendance'}>
                   عرض التقرير الكامل <ArrowUpRight className="w-4 h-4" />
                 </button>
               </div>
