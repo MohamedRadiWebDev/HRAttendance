@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar as CalendarIcon, RefreshCw, Download } from "lucide-react";
 import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
-import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from 'xlsx';
 
 export default function Attendance() {
   const [dateRange, setDateRange] = useState({
@@ -25,6 +26,15 @@ export default function Attendance() {
         toast({ title: "اكتملت المعالجة", description: data.message });
       }
     });
+  };
+
+  const handleExport = () => {
+    if (!records || records.length === 0) return;
+    const worksheet = XLSX.utils.json_to_sheet(records);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
+    XLSX.writeFile(workbook, `Attendance_${dateRange.start}_${dateRange.end}.xlsx`);
+    toast({ title: "تم التصدير", description: "تم تحميل ملف الإكسل بنجاح" });
   };
 
   return (
@@ -59,7 +69,7 @@ export default function Attendance() {
                   <RefreshCw className={cn("w-4 h-4", processAttendance.isPending && "animate-spin")} />
                   معالجة الحضور
                 </Button>
-                <Button className="gap-2 bg-primary hover:bg-primary/90">
+                <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleExport}>
                   <Download className="w-4 h-4" />
                   تصدير التقرير
                 </Button>
@@ -98,13 +108,13 @@ export default function Attendance() {
                         </td>
                         <td className="px-6 py-4 font-bold">{record.totalHours?.toFixed(2)}</td>
                         <td className="px-6 py-4 text-emerald-600 font-bold">
-                          {record.overtimeHours > 0 ? `+${record.overtimeHours.toFixed(2)}` : "-"}
+                          {record.overtimeHours && record.overtimeHours > 0 ? `+${record.overtimeHours.toFixed(2)}` : "-"}
                         </td>
                         <td className="px-6 py-4">
                           <StatusBadge status={record.status} isOvernight={record.isOvernight} />
                         </td>
                         <td className="px-6 py-4">
-                          {record.penalties && (record.penalties as any[]).length > 0 && (
+                          {record.penalties && Array.isArray(record.penalties) && record.penalties.length > 0 && (
                             <div className="flex gap-1">
                               {(record.penalties as any[]).map((p: any, i: number) => (
                                 <span key={i} className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs">

@@ -1,11 +1,19 @@
+import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2, Settings2, ShieldCheck } from "lucide-react";
-import { useRules, useDeleteRule } from "@/hooks/use-data";
+import { useRules, useDeleteRule, useCreateRule } from "@/hooks/use-data";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertRuleSchema, RULE_TYPES } from "@shared/schema";
 
 export default function Rules() {
   const { data: rules, isLoading } = useRules();
@@ -30,10 +38,7 @@ export default function Rules() {
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold font-display">إدارة القواعد الخاصة</h2>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />
-                إضافة قاعدة جديدة
-              </Button>
+              <AddRuleDialog />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -74,5 +79,151 @@ export default function Rules() {
         </main>
       </div>
     </div>
+  );
+}
+
+function AddRuleDialog() {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  const createRule = useCreateRule();
+  
+  const form = useForm({
+    resolver: zodResolver(insertRuleSchema),
+    defaultValues: {
+      name: "",
+      priority: 0,
+      scope: "all",
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0],
+      ruleType: "custom_shift",
+      params: {},
+    }
+  });
+
+  const onSubmit = (data: any) => {
+    createRule.mutate(data, {
+      onSuccess: () => {
+        toast({ title: "تم الحفظ", description: "تمت إضافة القاعدة بنجاح" });
+        setOpen(false);
+        form.reset();
+      },
+      onError: (err) => {
+        toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="gap-2">
+          <Plus className="w-4 h-4" />
+          إضافة قاعدة جديدة
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>إضافة قاعدة جديدة</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>اسم القاعدة</FormLabel>
+                  <FormControl>
+                    <Input placeholder="مثال: وردية مسائية" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="ruleType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>النوع</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر النوع" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {RULE_TYPES.map(type => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>الأولوية</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>من تاريخ</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>إلى تاريخ</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="scope"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>النطاق (all, dept:Name, emp:Code)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="all" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full" disabled={createRule.isPending}>
+              {createRule.isPending ? "جاري الحفظ..." : "حفظ القاعدة"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

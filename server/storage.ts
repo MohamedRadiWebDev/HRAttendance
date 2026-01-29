@@ -1,5 +1,4 @@
 import { 
-  users, type User, type InsertUser,
   employees, type Employee, type InsertEmployee,
   biometricPunches, type BiometricPunch, type InsertBiometricPunch,
   excelTemplates, type Template, type InsertTemplate,

@@ -11,14 +11,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertEmployeeSchema } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from 'xlsx';
 
 export default function Employees() {
   const { data: employees, isLoading } = useEmployees();
   const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
   
   const filteredEmployees = employees?.filter(emp => 
     emp.nameAr.includes(searchTerm) || emp.code.includes(searchTerm)
   );
+
+  const handleExport = () => {
+    if (!employees || employees.length === 0) return;
+    const worksheet = XLSX.utils.json_to_sheet(employees);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+    XLSX.writeFile(workbook, "Employees_Master_Data.xlsx");
+    toast({ title: "تم التصدير", description: "تم تحميل ملف بيانات الموظفين بنجاح" });
+  };
 
   return (
     <div className="flex h-screen bg-slate-50/50">
@@ -45,7 +56,7 @@ export default function Employees() {
               </div>
 
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2" onClick={handleExport}>
                   <FileDown className="w-4 h-4" />
                   تصدير
                 </Button>
