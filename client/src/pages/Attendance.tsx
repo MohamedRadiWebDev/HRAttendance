@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar as CalendarIcon, RefreshCw, Download, Search } from "lucide-react";
 import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
+import { useEmployees } from "@/hooks/use-employees";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as XLSX from 'xlsx';
 
 export default function Attendance() {
@@ -18,8 +20,20 @@ export default function Attendance() {
   const [employeeFilter, setEmployeeFilter] = useState("");
   
   const { data: records, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter);
+  const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
   const { toast } = useToast();
+
+  const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
+  const [sectorFilter, setSectorFilter] = useState("all");
+
+  const filteredRecords = records?.filter(record => {
+    if (sectorFilter !== "all") {
+      const emp = employees?.find(e => e.code === record.employeeCode);
+      return emp?.sector === sectorFilter;
+    }
+    return true;
+  });
 
   const handleProcess = () => {
     processAttendance.mutate({ startDate: dateRange.start, endDate: dateRange.end }, {
@@ -72,6 +86,17 @@ export default function Attendance() {
                     onChange={(e) => setEmployeeFilter(e.target.value)}
                   />
                 </div>
+                <Select value={sectorFilter} onValueChange={setSectorFilter}>
+                  <SelectTrigger className="w-[180px] h-10">
+                    <SelectValue placeholder="القطاع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل القطاعات</SelectItem>
+                    {sectors.map(s => (
+                      <SelectItem key={s} value={s as string}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center gap-3">
@@ -103,10 +128,10 @@ export default function Attendance() {
                 <tbody className="divide-y divide-border/50">
                   {isLoading ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center">جاري تحميل البيانات...</td></tr>
-                  ) : records?.length === 0 ? (
+                  ) : filteredRecords?.length === 0 ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة</td></tr>
                   ) : (
-                    records?.map((record) => (
+                    filteredRecords?.map((record) => (
                       <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 font-mono text-muted-foreground">{record.date}</td>
                         <td className="px-6 py-4 font-medium">{record.employeeCode}</td>
