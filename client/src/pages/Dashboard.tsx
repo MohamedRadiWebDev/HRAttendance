@@ -1,7 +1,7 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { StatCard } from "@/components/StatCard";
-import { Users, Clock, AlertTriangle, CheckCircle, ArrowUpRight } from "lucide-react";
+import { Users, Clock, AlertTriangle, CheckCircle, ArrowUpRight, Trash2 } from "lucide-react";
 import { useAttendanceRecords } from "@/hooks/use-attendance";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useEmployees } from "@/hooks/use-employees";
@@ -16,7 +16,7 @@ export default function Dashboard() {
     format(new Date(), "yyyy-MM-dd"),
     "",
     1,
-    1000
+    5000 // Increase limit significantly to ensure we get all data
   );
 
   const { data: allEmployees } = useEmployees();
@@ -53,7 +53,29 @@ export default function Dashboard() {
         <Header title="لوحة التحكم" />
         
         <main className="flex-1 overflow-y-auto p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold font-display">لوحة التحكم</h2>
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                className="gap-2"
+                onClick={() => {
+                  if (window.confirm("هل أنت متأكد من مسح كافة بيانات الموقع؟ لا يمكن التراجع عن هذا الإجراء.")) {
+                    fetch("/api/admin/wipe-data", { method: "POST" })
+                      .then(res => res.json())
+                      .then(data => {
+                        window.alert(data.message);
+                        window.location.reload();
+                      });
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+                مسح كافة البيانات
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {stats.map((stat, i) => (
               <StatCard key={i} {...stat} />
             ))}

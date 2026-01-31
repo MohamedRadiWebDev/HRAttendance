@@ -195,12 +195,11 @@ export async function registerRoutes(
               totalHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
             }
 
+            let penalties = [];
+            let status = activeAdj ? "Excused" : "Present";
             const shiftStartParts = currentShiftStart.split(':');
             const shiftStart = new Date(d);
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
-            
-            let penalties = [];
-            let status = activeAdj ? "Excused" : "Present";
 
             if (!activeAdj && checkIn) {
               const lateMinutes = Math.floor((checkIn.getTime() - shiftStart.getTime()) / (1000 * 60));
@@ -212,6 +211,8 @@ export async function registerRoutes(
                 else latePenalty = 0.25;
                 
                 penalties.push({ type: "تأخير", value: latePenalty, minutes: lateMinutes });
+              } else {
+                status = "Present";
               }
             } else if (!activeAdj && !checkIn) {
               status = "Absent";
@@ -281,6 +282,16 @@ export async function registerRoutes(
   if (employeesCount.length === 0) {
     console.log("Database is empty. Ready for import.");
   }
+
+  // Wiping Data
+  app.post("/api/admin/wipe-data", async (req, res) => {
+    try {
+      await storage.wipeAllData();
+      res.json({ message: "تم مسح كافة البيانات بنجاح" });
+    } catch (err: any) {
+      res.status(500).json({ message: "فشل مسح البيانات", error: err.message });
+    }
+  });
 
   return httpServer;
 }

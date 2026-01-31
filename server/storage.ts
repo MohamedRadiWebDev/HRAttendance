@@ -43,9 +43,21 @@ export interface IStorage {
   // Bulk operations for import
   createEmployeesBulk(employees: InsertEmployee[]): Promise<Employee[]>;
   createPunchesBulk(punches: InsertBiometricPunch[]): Promise<BiometricPunch[]>;
+
+  // Maintenance
+  wipeAllData(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
+  async wipeAllData(): Promise<void> {
+    await db.delete(attendanceRecords);
+    await db.delete(adjustments);
+    await db.delete(specialRules);
+    await db.delete(biometricPunches);
+    await db.delete(employees);
+    await db.delete(excelTemplates);
+  }
+
   // Employees
   async getEmployees(): Promise<Employee[]> {
     return await db.select().from(employees);
