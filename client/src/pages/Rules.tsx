@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2, Settings2, ShieldCheck } from "lucide-react";
 import { useRules, useDeleteRule, useCreateRule } from "@/hooks/use-data";
+import { useEmployees } from "@/hooks/use-employees";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -167,7 +168,7 @@ function AddRuleDialog() {
                 name="startDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>من تاريخ</label>
+                    <FormLabel>من تاريخ</FormLabel>
                     <FormControl><Input type="date" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -178,7 +179,7 @@ function AddRuleDialog() {
                 name="endDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>إلى تاريخ</label>
+                    <FormLabel>إلى تاريخ</FormLabel>
                     <FormControl><Input type="date" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -189,35 +190,60 @@ function AddRuleDialog() {
             <FormField
               control={form.control}
               name="scope"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>النطاق (الكل / قطاع / أكواد)</FormLabel>
-                  <Select 
-                    onValueChange={(val) => field.onChange(val)} 
-                    value={field.value.startsWith('sector:') ? field.value : (field.value === 'all' ? 'all' : 'custom')}
-                  >
-                    <FormControl>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="all">الكل</SelectItem>
-                      {sectors.map(s => (
-                        <SelectItem key={s} value={`sector:${s}`}>{`قطاع: ${s}`}</SelectItem>
-                      ))}
-                      <SelectItem value="custom">تخصيص أكواد</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="mt-2">
-                    <Input 
-                      placeholder="اكتب الأكواد: 101,102" 
-                      value={field.value.startsWith('emp:') ? field.value.replace('emp:', '') : ''}
-                      onChange={(e) => field.onChange(`emp:${e.target.value}`)}
-                      className={field.value.startsWith('emp:') || !field.value.includes(':') && field.value !== 'all' ? 'block' : 'hidden'}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
+              render={({ field }) => {
+                const isSect = typeof field.value === 'string' && field.value.startsWith('sector:');
+                const isEmp = typeof field.value === 'string' && field.value.startsWith('emp:');
+                const scopeType = isSect ? 'sector' : (isEmp ? 'emp' : 'all');
+                
+                return (
+                  <FormItem>
+                    <FormLabel>النطاق</FormLabel>
+                    <Select 
+                      onValueChange={(val) => {
+                        if (val === 'all') field.onChange('all');
+                        else if (val === 'sector') field.onChange('sector:');
+                        else field.onChange('emp:');
+                      }} 
+                      value={scopeType}
+                    >
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        <SelectItem value="sector">قطاع محدد</SelectItem>
+                        <SelectItem value="emp">أكواد موظفين</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    {scopeType === 'sector' && (
+                      <div className="mt-2">
+                        <Select onValueChange={(val) => field.onChange(`sector:${val}`)} value={field.value.split(':')[1] || ""}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="اختر القطاع" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {sectors.map(s => (
+                              <SelectItem key={s} value={s as string}>{s}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {scopeType === 'emp' && (
+                      <div className="mt-2">
+                        <Input 
+                          placeholder="اكتب الأكواد: 101,102" 
+                          value={field.value.replace('emp:', '')}
+                          onChange={(e) => field.onChange(`emp:${e.target.value}`)}
+                        />
+                      </div>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
 
             {form.watch("ruleType") === "custom_shift" && (

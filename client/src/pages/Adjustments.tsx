@@ -3,8 +3,9 @@ import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Briefcase, Plus, FileText, CheckCircle2 } from "lucide-react";
+import { Briefcase, Plus, FileText, CheckCircle2, Search } from "lucide-react";
 import { useAdjustments, useCreateAdjustment } from "@/hooks/use-data";
+import { useEmployees } from "@/hooks/use-employees";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -17,6 +18,14 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Adjustments() {
   const { data: adjustments, isLoading } = useAdjustments();
+  const { data: employees } = useEmployees();
+  const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
+
+  const filteredAdjustments = adjustments?.filter(adj => 
+    adj.employeeCode.includes(searchTerm) || 
+    employees?.find(e => e.code === adj.employeeCode)?.nameAr.includes(searchTerm)
+  );
 
   return (
     <div className="flex h-screen bg-slate-50/50">
@@ -26,7 +35,15 @@ export default function Adjustments() {
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold font-display">سجل الإجازات والمهمات</h2>
+              <div className="relative w-64">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input 
+                  placeholder="بحث بالكود أو الاسم..." 
+                  className="pr-10 h-10"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
               <AddAdjustmentDialog />
             </div>
 
@@ -49,9 +66,16 @@ export default function Adjustments() {
                         <td colSpan={6} className="px-6 py-4 h-12 bg-slate-50/50"></td>
                       </tr>
                     ))
-                  ) : adjustments?.map((adj) => (
+                  ) : filteredAdjustments?.map((adj) => (
                     <tr key={adj.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-medium">{adj.employeeCode}</td>
+                      <td className="px-6 py-4 font-medium">
+                        <div className="flex flex-col">
+                          <span className="font-mono">{adj.employeeCode}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {employees?.find(e => e.code === adj.employeeCode)?.nameAr}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <Badge variant="outline" className="capitalize">
                           {adj.type === 'annual' ? 'إجازة سنوية' : adj.type === 'sick' ? 'إجازة مرضي' : adj.type === 'mission' ? 'مأمورية' : adj.type}
@@ -73,7 +97,7 @@ export default function Adjustments() {
                       </td>
                     </tr>
                   ))}
-                  {adjustments?.length === 0 && (
+                  {filteredAdjustments?.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                         لا يوجد سجلات حالياً
