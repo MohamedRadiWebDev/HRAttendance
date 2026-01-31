@@ -195,7 +195,6 @@ export async function registerRoutes(
               totalHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
             }
 
-            let status = activeAdj ? "Excused" : "Present";
             const shiftStartParts = currentShiftStart.split(':');
             const shiftStart = new Date(d);
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
