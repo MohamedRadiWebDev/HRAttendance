@@ -20,12 +20,12 @@ export default function Attendance() {
   const [employeeFilter, setEmployeeFilter] = useState("");
   
   const [page, setPage] = useState(1);
-  const limit = 50;
+  const limit = 0;
   
   const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit);
   const records = recordsData?.data;
   const total = recordsData?.total || 0;
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
   const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
   const { toast } = useToast();
@@ -180,7 +180,7 @@ export default function Attendance() {
               </table>
             </div>
 
-            {totalPages > 1 && (
+            {limit > 0 && totalPages > 1 && (
               <div className="p-4 border-t border-border/50 flex items-center justify-center gap-2 bg-white">
                 <Button 
                   variant="outline" 

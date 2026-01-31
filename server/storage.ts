@@ -149,7 +149,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Attendance
-  async getAttendance(startDate: string, endDate: string, employeeCode?: string, limit: number = 50, offset: number = 0): Promise<{ data: AttendanceRecord[], total: number }> {
+  async getAttendance(startDate: string, endDate: string, employeeCode?: string, limit: number = 0, offset: number = 0): Promise<{ data: AttendanceRecord[], total: number }> {
     let conditions = [gte(attendanceRecords.date, startDate), lte(attendanceRecords.date, endDate)];
     if (employeeCode) {
       if (employeeCode.includes(',')) {
@@ -166,12 +166,16 @@ export class DatabaseStorage implements IStorage {
       count: sql<number>`count(*)` 
     }).from(attendanceRecords).where(and(...conditions));
 
-    const data = await db.select()
+    let dataQuery = db.select()
       .from(attendanceRecords)
       .where(and(...conditions))
-      .limit(limit)
-      .offset(offset)
       .orderBy(desc(attendanceRecords.date), desc(attendanceRecords.id));
+    
+    if (limit > 0) {
+      dataQuery = dataQuery.limit(limit).offset(offset);
+    }
+
+    const data = await dataQuery;
 
     return { data, total: Number(countResult?.count || 0) };
   }

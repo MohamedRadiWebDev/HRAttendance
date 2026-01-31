@@ -123,12 +123,14 @@ export async function registerRoutes(
     if (!startDate || !endDate) {
       return res.status(400).json({ message: "Start and End dates required" });
     }
-    const offset = (Number(page) - 1) * Number(limit);
+    const limitNumber = Number(limit);
+    const safeLimit = Number.isFinite(limitNumber) ? limitNumber : 0;
+    const offset = safeLimit > 0 ? (Number(page) - 1) * safeLimit : 0;
     const { data, total } = await storage.getAttendance(
       String(startDate), 
       String(endDate), 
       employeeCode as string,
-      Number(limit),
+      safeLimit,
       offset
     );
     res.json({ data, total, page: Number(page), limit: Number(limit) });
@@ -138,7 +140,11 @@ export async function registerRoutes(
     const { startDate, endDate } = req.body;
     try {
       const allEmployees = await storage.getEmployees();
-      const punches = await storage.getPunches(new Date(startDate), new Date(endDate));
+      const punchStart = new Date(startDate);
+      punchStart.setHours(0, 0, 0, 0);
+      const punchEnd = new Date(endDate);
+      punchEnd.setHours(23, 59, 59, 999);
+      const punches = await storage.getPunches(punchStart, punchEnd);
       const rules = await storage.getRules();
       const adjustments = await storage.getAdjustments();
       
