@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -14,14 +14,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import * as XLSX from 'xlsx';
 
 export default function Attendance() {
-  const [, setLocation] = useLocation();
-  const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  const initialStart = searchParams.get("startDate") || format(startOfMonth(new Date()), "yyyy-MM-dd");
-  const initialEnd = searchParams.get("endDate") || format(endOfMonth(new Date()), "yyyy-MM-dd");
-
-  const [dateRange, setDateRange] = useState({
-    start: initialStart,
-    end: initialEnd
+  const [location, setLocation] = useLocation();
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    return {
+      start: format(startOfMonth(now), "yyyy-MM-dd"),
+      end: format(endOfMonth(now), "yyyy-MM-dd")
+    };
   });
   const [employeeFilter, setEmployeeFilter] = useState("");
   
@@ -37,9 +36,29 @@ export default function Attendance() {
   const { toast } = useToast();
 
   useEffect(() => {
+    const queryString = location.split("?")[1] || "";
+    const params = new URLSearchParams(queryString);
+    const startDate = params.get("startDate");
+    const endDate = params.get("endDate");
+    const storedStart = localStorage.getItem("attendanceStartDate");
+    const storedEnd = localStorage.getItem("attendanceEndDate");
+    const fallbackStart = storedStart || format(startOfMonth(new Date()), "yyyy-MM-dd");
+    const fallbackEnd = storedEnd || format(endOfMonth(new Date()), "yyyy-MM-dd");
+    const nextStart = startDate || fallbackStart;
+    const nextEnd = endDate || fallbackEnd;
+
+    setDateRange((prev) => {
+      if (prev.start === nextStart && prev.end === nextEnd) return prev;
+      return { start: nextStart, end: nextEnd };
+    });
+  }, [location]);
+
+  useEffect(() => {
     const params = new URLSearchParams();
     params.set("startDate", dateRange.start);
     params.set("endDate", dateRange.end);
+    localStorage.setItem("attendanceStartDate", dateRange.start);
+    localStorage.setItem("attendanceEndDate", dateRange.end);
     setLocation(`/attendance?${params.toString()}`, { replace: true });
   }, [dateRange, setLocation]);
 
