@@ -139,6 +139,13 @@ export async function registerRoutes(
   app.post(api.attendance.process.path, async (req, res) => {
     const { startDate, endDate } = req.body;
     try {
+      const formatDate = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      };
+
       const allEmployees = await storage.getEmployees();
       const punchStart = new Date(startDate);
       punchStart.setHours(0, 0, 0, 0);
@@ -154,7 +161,7 @@ export async function registerRoutes(
 
       for (const employee of allEmployees) {
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toISOString().split('T')[0];
+          const dateStr = formatDate(d);
           
           // 1. Get applicable rules for this employee and date
           const activeRules = rules.filter(r => {
@@ -189,7 +196,7 @@ export async function registerRoutes(
 
           const dayPunches = punches.filter(p => 
             p.employeeCode === employee.code && 
-            p.punchDatetime.toISOString().split('T')[0] === dateStr
+            formatDate(p.punchDatetime) === dateStr
           ).sort((a, b) => a.punchDatetime.getTime() - b.punchDatetime.getTime());
 
           if (dayPunches.length > 0 || activeAdj) {
@@ -208,9 +215,9 @@ export async function registerRoutes(
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
 
             if (!activeAdj && checkIn) {
-              const rawLateMinutes = (checkIn.getTime() - shiftStart.getTime()) / (1000 * 60);
-              const lateMinutes = Math.max(0, Math.ceil(rawLateMinutes));
-              if (lateMinutes > 15) {
+              const diffMs = checkIn.getTime() - shiftStart.getTime();
+              const lateMinutes = Math.max(0, Math.ceil(diffMs / (1000 * 60)));
+              if (diffMs > 15 * 60 * 1000) {
                 status = "Late";
                 let latePenalty = 0;
                 if (lateMinutes > 60) latePenalty = 1;
