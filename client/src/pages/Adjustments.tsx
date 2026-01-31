@@ -272,6 +272,12 @@ function AddAdjustmentDialog() {
                 </FormItem>
               )}
             />
+            <FormItem>
+              <FormLabel>الإدارة</FormLabel>
+              <FormControl>
+                <Input value={selectedEmployee?.department || "-"} readOnly />
+              </FormControl>
+            </FormItem>
             <FormField
               control={form.control}
               name="type"
