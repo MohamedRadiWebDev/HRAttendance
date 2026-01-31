@@ -130,6 +130,7 @@ function AddAdjustmentDialog() {
       notes: "",
     }
   });
+  const selectedEmployee = employees?.find(emp => emp.code === form.watch("employeeCode"));
 
   const onSubmit = (data: any) => {
     createAdjustment.mutate(data, {
@@ -182,6 +183,12 @@ function AddAdjustmentDialog() {
                 </FormItem>
               )}
             />
+            <FormItem>
+              <FormLabel>الإدارة</FormLabel>
+              <FormControl>
+                <Input value={selectedEmployee?.department || "-"} readOnly />
+              </FormControl>
+            </FormItem>
             <FormField
               control={form.control}
               name="type"

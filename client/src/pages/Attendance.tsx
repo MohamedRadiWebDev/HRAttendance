@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar as CalendarIcon, RefreshCw, Download, Search } from "lucide-react";
+import { RefreshCw, Download, Search } from "lucide-react";
 import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
 import { useEmployees } from "@/hooks/use-employees";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
@@ -13,9 +14,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import * as XLSX from 'xlsx';
 
 export default function Attendance() {
+  const [, setLocation] = useLocation();
+  const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const initialStart = searchParams.get("startDate") || format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const initialEnd = searchParams.get("endDate") || format(endOfMonth(new Date()), "yyyy-MM-dd");
+
   const [dateRange, setDateRange] = useState({
-    start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
-    end: format(endOfMonth(new Date()), "yyyy-MM-dd")
+    start: initialStart,
+    end: initialEnd
   });
   const [employeeFilter, setEmployeeFilter] = useState("");
   
@@ -29,6 +35,13 @@ export default function Attendance() {
   const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("startDate", dateRange.start);
+    params.set("endDate", dateRange.end);
+    setLocation(`/attendance?${params.toString()}`, { replace: true });
+  }, [dateRange, setLocation]);
 
   const handleProcess = () => {
     processAttendance.mutate({ startDate: dateRange.start, endDate: dateRange.end }, {
