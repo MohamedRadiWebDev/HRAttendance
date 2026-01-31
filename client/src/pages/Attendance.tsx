@@ -108,15 +108,20 @@ export default function Attendance() {
                 </Select>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={handleProcess} disabled={processAttendance.isPending} className="gap-2">
-                  <RefreshCw className={cn("w-4 h-4", processAttendance.isPending && "animate-spin")} />
-                  معالجة الحضور
-                </Button>
-                <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleExport}>
-                  <Download className="w-4 h-4" />
-                  تصدير التقرير
-                </Button>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" onClick={handleProcess} disabled={processAttendance.isPending} className="gap-2">
+                    <RefreshCw className={cn("w-4 h-4", processAttendance.isPending && "animate-spin")} />
+                    معالجة الحضور
+                  </Button>
+                  <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleExport}>
+                    <Download className="w-4 h-4" />
+                    تصدير التقرير
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  يعيد حساب الحضور من البصمة للفترة المختارة
+                </span>
               </div>
             </div>
 
@@ -138,7 +143,7 @@ export default function Attendance() {
                   {isLoading ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center">جاري تحميل البيانات...</td></tr>
                   ) : filteredRecords?.length === 0 ? (
-                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة. جرّب معالجة الحضور بعد استيراد البصمة.</td></tr>
                   ) : (
                     filteredRecords?.map((record: any) => (
                       <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
