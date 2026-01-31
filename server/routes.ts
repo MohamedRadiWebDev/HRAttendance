@@ -201,18 +201,18 @@ export async function registerRoutes(
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
             
             let penalties = [];
+            let status = activeAdj ? "Excused" : "Present";
+
             if (!activeAdj && checkIn) {
               const lateMinutes = Math.floor((checkIn.getTime() - shiftStart.getTime()) / (1000 * 60));
-              let latePenalty = 0;
-              if (lateMinutes > 60) latePenalty = 1;
-              else if (lateMinutes > 30) latePenalty = 0.5;
-              else if (lateMinutes >= 16) latePenalty = 0.25;
-              
-              if (latePenalty > 0) {
+              if (lateMinutes >= 16) {
                 status = "Late";
+                let latePenalty = 0;
+                if (lateMinutes > 60) latePenalty = 1;
+                else if (lateMinutes > 30) latePenalty = 0.5;
+                else latePenalty = 0.25;
+                
                 penalties.push({ type: "تأخير", value: latePenalty, minutes: lateMinutes });
-              } else {
-                status = "Present";
               }
             } else if (!activeAdj && !checkIn) {
               status = "Absent";

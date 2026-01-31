@@ -140,7 +140,7 @@ export default function Attendance() {
                   ) : filteredRecords?.length === 0 ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة</td></tr>
                   ) : (
-                    filteredRecords?.map((record) => (
+                    filteredRecords?.map((record: any) => (
                       <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 font-mono text-muted-foreground">{record.date}</td>
                         <td className="px-6 py-4 font-medium">{record.employeeCode}</td>

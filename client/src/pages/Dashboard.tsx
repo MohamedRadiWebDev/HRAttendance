@@ -11,10 +11,15 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
 export default function Dashboard() {
   const { data: employees } = useEmployees();
-  const { data: attendanceData } = useAttendanceRecords(
+  const { data: attendanceData, isLoading: attendanceLoading } = useAttendanceRecords(
     format(new Date(), "yyyy-MM-dd"),
-    format(new Date(), "yyyy-MM-dd")
+    format(new Date(), "yyyy-MM-dd"),
+    "",
+    1,
+    1000
   );
+
+  const { data: allEmployees } = useEmployees();
 
   const todayRecords = (attendanceData as any)?.data || [];
   const presentCount = todayRecords.filter((r: any) => r.status === "Present" || r.status === "Late").length;
@@ -23,7 +28,7 @@ export default function Dashboard() {
   const excusedCount = todayRecords.filter((r: any) => r.status === "Excused").length;
 
   const stats = [
-    { title: "إجمالي الموظفين", value: employees?.length || 0, icon: Users, color: "blue" as const, trend: "", trendUp: true },
+    { title: "إجمالي الموظفين", value: allEmployees?.length || 0, icon: Users, color: "blue" as const, trend: "", trendUp: true },
     { title: "حضور اليوم", value: presentCount, icon: CheckCircle, color: "green" as const, trend: "", trendUp: true },
     { title: "تأخيرات", value: lateCount, icon: Clock, color: "orange" as const, trend: "", trendUp: true },
     { title: "غياب", value: absentCount, icon: AlertTriangle, color: "red" as const, trend: "", trendUp: false },
