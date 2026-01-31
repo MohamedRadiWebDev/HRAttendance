@@ -202,8 +202,9 @@ export async function registerRoutes(
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
 
             if (!activeAdj && checkIn) {
-              const lateMinutes = Math.floor((checkIn.getTime() - shiftStart.getTime()) / (1000 * 60));
-              if (lateMinutes >= 16) {
+              const rawLateMinutes = (checkIn.getTime() - shiftStart.getTime()) / (1000 * 60);
+              const lateMinutes = Math.max(0, Math.ceil(rawLateMinutes));
+              if (lateMinutes > 15) {
                 status = "Late";
                 let latePenalty = 0;
                 if (lateMinutes > 60) latePenalty = 1;
