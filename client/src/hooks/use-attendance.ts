@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import type { AttendanceRecord, InsertBiometricPunch } from "@shared/schema";
 
-export function useAttendanceRecords(startDate?: string, endDate?: string, employeeCode?: string, page: number = 1, limit: number = 50) {
+export function useAttendanceRecords(startDate?: string, endDate?: string, employeeCode?: string, page: number = 1, limit: number = 0) {
   // Default to current month if no dates provided
   const now = new Date();
   const defaultStart = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
