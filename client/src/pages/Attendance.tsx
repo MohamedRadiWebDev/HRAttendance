@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar as CalendarIcon, RefreshCw, Download, Search } from "lucide-react";
+import { RefreshCw, Download, Search } from "lucide-react";
 import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
 import { useEmployees } from "@/hooks/use-employees";
 import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
@@ -13,22 +14,53 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import * as XLSX from 'xlsx';
 
 export default function Attendance() {
-  const [dateRange, setDateRange] = useState({
-    start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
-    end: format(endOfMonth(new Date()), "yyyy-MM-dd")
+  const [location, setLocation] = useLocation();
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    return {
+      start: format(startOfMonth(now), "yyyy-MM-dd"),
+      end: format(endOfMonth(now), "yyyy-MM-dd")
+    };
   });
   const [employeeFilter, setEmployeeFilter] = useState("");
   
   const [page, setPage] = useState(1);
-  const limit = 50;
+  const limit = 0;
   
   const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit);
   const records = recordsData?.data;
   const total = recordsData?.total || 0;
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
   const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const queryString = location.split("?")[1] || "";
+    const params = new URLSearchParams(queryString);
+    const startDate = params.get("startDate");
+    const endDate = params.get("endDate");
+    const storedStart = localStorage.getItem("attendanceStartDate");
+    const storedEnd = localStorage.getItem("attendanceEndDate");
+    const fallbackStart = storedStart || format(startOfMonth(new Date()), "yyyy-MM-dd");
+    const fallbackEnd = storedEnd || format(endOfMonth(new Date()), "yyyy-MM-dd");
+    const nextStart = startDate || fallbackStart;
+    const nextEnd = endDate || fallbackEnd;
+
+    setDateRange((prev) => {
+      if (prev.start === nextStart && prev.end === nextEnd) return prev;
+      return { start: nextStart, end: nextEnd };
+    });
+  }, [location]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("startDate", dateRange.start);
+    params.set("endDate", dateRange.end);
+    localStorage.setItem("attendanceStartDate", dateRange.start);
+    localStorage.setItem("attendanceEndDate", dateRange.end);
+    setLocation(`/attendance?${params.toString()}`, { replace: true });
+  }, [dateRange, setLocation]);
 
   const handleProcess = () => {
     processAttendance.mutate({ startDate: dateRange.start, endDate: dateRange.end }, {
@@ -108,15 +140,20 @@ export default function Attendance() {
                 </Select>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={handleProcess} disabled={processAttendance.isPending} className="gap-2">
-                  <RefreshCw className={cn("w-4 h-4", processAttendance.isPending && "animate-spin")} />
-                  معالجة الحضور
-                </Button>
-                <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleExport}>
-                  <Download className="w-4 h-4" />
-                  تصدير التقرير
-                </Button>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" onClick={handleProcess} disabled={processAttendance.isPending} className="gap-2">
+                    <RefreshCw className={cn("w-4 h-4", processAttendance.isPending && "animate-spin")} />
+                    معالجة الحضور
+                  </Button>
+                  <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleExport}>
+                    <Download className="w-4 h-4" />
+                    تصدير التقرير
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  يعيد حساب الحضور من البصمة للفترة المختارة
+                </span>
               </div>
             </div>
 
@@ -138,7 +175,7 @@ export default function Attendance() {
                   {isLoading ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center">جاري تحميل البيانات...</td></tr>
                   ) : filteredRecords?.length === 0 ? (
-                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة. جرّب معالجة الحضور بعد استيراد البصمة.</td></tr>
                   ) : (
                     filteredRecords?.map((record: any) => (
                       <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
@@ -180,7 +217,7 @@ export default function Attendance() {
               </table>
             </div>
 
-            {totalPages > 1 && (
+            {limit > 0 && totalPages > 1 && (
               <div className="p-4 border-t border-border/50 flex items-center justify-center gap-2 bg-white">
                 <Button 
                   variant="outline" 
