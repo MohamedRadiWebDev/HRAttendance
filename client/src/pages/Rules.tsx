@@ -90,6 +90,7 @@ function AddRuleDialog() {
   const { data: employees } = useEmployees();
   
   const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
+  const departments = Array.from(new Set(employees?.map(e => e.department).filter(Boolean) || []));
   
   const form = useForm({
     resolver: zodResolver(insertRuleSchema),
@@ -192,8 +193,9 @@ function AddRuleDialog() {
               name="scope"
               render={({ field }) => {
                 const isSect = typeof field.value === 'string' && field.value.startsWith('sector:');
+                const isDept = typeof field.value === 'string' && field.value.startsWith('dept:');
                 const isEmp = typeof field.value === 'string' && field.value.startsWith('emp:');
-                const scopeType = isSect ? 'sector' : (isEmp ? 'emp' : 'all');
+                const scopeType = isSect ? 'sector' : (isDept ? 'dept' : (isEmp ? 'emp' : 'all'));
                 
                 return (
                   <FormItem>
@@ -202,6 +204,7 @@ function AddRuleDialog() {
                       onValueChange={(val) => {
                         if (val === 'all') field.onChange('all');
                         else if (val === 'sector') field.onChange('sector:');
+                        else if (val === 'dept') field.onChange('dept:');
                         else field.onChange('emp:');
                       }} 
                       value={scopeType}
@@ -212,6 +215,7 @@ function AddRuleDialog() {
                       <SelectContent>
                         <SelectItem value="all">الكل</SelectItem>
                         <SelectItem value="sector">قطاع محدد</SelectItem>
+                        <SelectItem value="dept">إدارة محددة</SelectItem>
                         <SelectItem value="emp">أكواد موظفين</SelectItem>
                       </SelectContent>
                     </Select>
@@ -225,6 +229,21 @@ function AddRuleDialog() {
                           <SelectContent>
                             {sectors.map(s => (
                               <SelectItem key={s} value={s as string}>{s}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {scopeType === 'dept' && (
+                      <div className="mt-2">
+                        <Select onValueChange={(val) => field.onChange(`dept:${val}`)} value={field.value.split(':')[1] || ""}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="اختر الإدارة" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {departments.map(d => (
+                              <SelectItem key={d} value={d as string}>{d}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
