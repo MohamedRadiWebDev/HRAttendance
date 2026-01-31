@@ -6,12 +6,15 @@ import { Upload, FileType, CheckCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import { useImportEmployees, useImportPunches } from "@/hooks/use-employees";
+import { useProcessAttendance } from "@/hooks/use-attendance";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { format } from "date-fns";
 
 export default function Import() {
   const { toast } = useToast();
   const importEmployees = useImportEmployees();
   const importPunches = useImportPunches();
+  const processAttendance = useProcessAttendance();
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState("employees");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -106,12 +109,25 @@ export default function Import() {
           
           return {
             employeeCode,
-            punchDatetime: punchDatetime.toISOString(), // Send as string to avoid toISOString error on server
+            punchDatetime: format(punchDatetime, "yyyy-MM-dd'T'HH:mm:ss"),
           };
         }).filter(p => p.employeeCode && p.punchDatetime && p.punchDatetime !== "Invalid Date");
 
         if (mapped.length === 0) throw new Error("لم يتم العثور على سجلات بصمة صالحة. تأكد من وجود أعمدة (ID, Clock In)");
         await importPunches.mutateAsync(mapped);
+
+        const punchDates = mapped
+          .map(p => new Date(p.punchDatetime))
+          .filter(date => !Number.isNaN(date.getTime()));
+
+        if (punchDates.length > 0) {
+          const minDate = new Date(Math.min(...punchDates.map(date => date.getTime())));
+          const maxDate = new Date(Math.max(...punchDates.map(date => date.getTime())));
+          await processAttendance.mutateAsync({
+            startDate: format(minDate, "yyyy-MM-dd"),
+            endDate: format(maxDate, "yyyy-MM-dd"),
+          });
+        }
       }
       
       toast({ title: "نجاح", description: "تم استيراد البيانات بنجاح" });
