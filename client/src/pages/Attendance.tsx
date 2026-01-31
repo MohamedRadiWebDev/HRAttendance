@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Calendar as CalendarIcon, RefreshCw, Download, Search } from "lucide-react";
 import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
 import { useEmployees } from "@/hooks/use-employees";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -77,15 +77,18 @@ export default function Attendance() {
                     className="border-none bg-transparent h-8 w-36"
                   />
                 </div>
-                <div className="relative w-64">
+              <div className="space-y-2 flex-1 min-w-[200px]">
+                <label className="text-sm font-medium">بحث بالأكواد (101, 102)...</label>
+                <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
-                    placeholder="بحث بالأكواد (101, 102)..." 
+                    placeholder="مثال: 101, 102, 105" 
                     className="pr-10 h-10"
-                    value={employeeFilter}
-                    onChange={(e) => setEmployeeFilter(e.target.value)}
+                    value={employeeFilter} 
+                    onChange={(e) => setEmployeeFilter(e.target.value)} 
                   />
                 </div>
+              </div>
                 <Select value={sectorFilter} onValueChange={setSectorFilter}>
                   <SelectTrigger className="w-[180px] h-10">
                     <SelectValue placeholder="القطاع" />
@@ -149,15 +152,20 @@ export default function Attendance() {
                           <StatusBadge status={record.status} isOvernight={record.isOvernight} />
                         </td>
                         <td className="px-6 py-4">
-                          {record.penalties && Array.isArray(record.penalties) && record.penalties.length > 0 && (
-                            <div className="flex gap-1">
-                              {(record.penalties as any[]).map((p: any, i: number) => (
-                                <span key={i} className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs">
-                                  {typeof p === 'object' ? String(p.type || JSON.stringify(p)) : String(p)}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex flex-col gap-1">
+                            {record.penalties && Array.isArray(record.penalties) && record.penalties.length > 0 && (
+                              <div className="flex gap-1 flex-wrap">
+                                {(record.penalties as any[]).map((p: any, i: number) => (
+                                  <span key={i} className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold">
+                                    {p.type}: {p.value}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {record.status === "Excused" && (
+                              <span className="text-[10px] text-emerald-600 font-medium italic">إذن مسجل</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))

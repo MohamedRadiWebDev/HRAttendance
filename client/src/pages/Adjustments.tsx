@@ -94,6 +94,7 @@ function AddAdjustmentDialog() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const createAdjustment = useCreateAdjustment();
+  const { data: employees } = useEmployees();
   
   const form = useForm({
     resolver: zodResolver(insertAdjustmentSchema),
@@ -113,7 +114,7 @@ function AddAdjustmentDialog() {
         setOpen(false);
         form.reset();
       },
-      onError: (err) => {
+      onError: (err: any) => {
         toast({ title: "خطأ", description: err.message, variant: "destructive" });
       }
     });
@@ -138,10 +139,21 @@ function AddAdjustmentDialog() {
               name="employeeCode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>كود الموظف</FormLabel>
-                  <FormControl>
-                    <Input placeholder="1001" {...field} />
-                  </FormControl>
+                  <FormLabel>الموظف</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر الموظف" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {employees?.map(emp => (
+                        <SelectItem key={emp.code} value={emp.code}>
+                          {emp.code} - {emp.nameAr}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

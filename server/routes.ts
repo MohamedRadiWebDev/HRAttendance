@@ -193,10 +193,21 @@ export async function registerRoutes(
             const shiftStart = new Date(d);
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
             
+            let penalties = [];
             if (!activeAdj && checkIn && checkIn > shiftStart) {
-              status = "Late";
+              const lateMinutes = Math.floor((checkIn.getTime() - shiftStart.getTime()) / (1000 * 60));
+              let latePenalty = 0;
+              if (lateMinutes > 60) latePenalty = 1;
+              else if (lateMinutes > 30) latePenalty = 0.5;
+              else if (lateMinutes >= 16) latePenalty = 0.25;
+              
+              if (latePenalty > 0) {
+                status = "Late";
+                penalties.push({ type: "تأخير", value: latePenalty, minutes: lateMinutes });
+              }
             } else if (!activeAdj && !checkIn) {
               status = "Absent";
+              penalties.push({ type: "غياب", value: 1 });
             }
 
             await storage.createAttendanceRecord({
@@ -207,7 +218,7 @@ export async function registerRoutes(
               totalHours,
               status,
               overtimeHours: Math.max(0, totalHours - 8),
-              penalties: [],
+              penalties,
               isOvernight: activeRules.some(r => r.ruleType === 'overtime_overnight')
             });
             processedCount++;
