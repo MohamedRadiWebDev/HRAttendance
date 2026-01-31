@@ -119,12 +119,19 @@ export async function registerRoutes(
 
   // Attendance
   app.get(api.attendance.list.path, async (req, res) => {
-    const { startDate, endDate, employeeCode } = req.query;
+    const { startDate, endDate, employeeCode, page = 1, limit = 50 } = req.query;
     if (!startDate || !endDate) {
       return res.status(400).json({ message: "Start and End dates required" });
     }
-    const attendance = await storage.getAttendance(String(startDate), String(endDate), employeeCode as string);
-    res.json(attendance);
+    const offset = (Number(page) - 1) * Number(limit);
+    const { data, total } = await storage.getAttendance(
+      String(startDate), 
+      String(endDate), 
+      employeeCode as string,
+      Number(limit),
+      offset
+    );
+    res.json({ data, total, page: Number(page), limit: Number(limit) });
   });
 
   app.post(api.attendance.process.path, async (req, res) => {
@@ -194,7 +201,7 @@ export async function registerRoutes(
             shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
             
             let penalties = [];
-            if (!activeAdj && checkIn && checkIn > shiftStart) {
+            if (!activeAdj && checkIn) {
               const lateMinutes = Math.floor((checkIn.getTime() - shiftStart.getTime()) / (1000 * 60));
               let latePenalty = 0;
               if (lateMinutes > 60) latePenalty = 1;
@@ -204,6 +211,8 @@ export async function registerRoutes(
               if (latePenalty > 0) {
                 status = "Late";
                 penalties.push({ type: "تأخير", value: latePenalty, minutes: lateMinutes });
+              } else {
+                status = "Present";
               }
             } else if (!activeAdj && !checkIn) {
               status = "Absent";

@@ -5,33 +5,40 @@ import { Users, Clock, AlertTriangle, CheckCircle, ArrowUpRight } from "lucide-r
 import { useAttendanceRecords } from "@/hooks/use-attendance";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useEmployees } from "@/hooks/use-employees";
+import { format } from "date-fns";
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
 export default function Dashboard() {
   const { data: employees } = useEmployees();
-  // In a real app, these stats would be aggregated on the backend
+  const { data: attendanceData } = useAttendanceRecords(
+    format(new Date(), "yyyy-MM-dd"),
+    format(new Date(), "yyyy-MM-dd")
+  );
+
+  const todayRecords = (attendanceData as any)?.data || [];
+  const presentCount = todayRecords.filter(r => r.status === "Present" || r.status === "Late").length;
+  const lateCount = todayRecords.filter(r => r.status === "Late").length;
+  const absentCount = todayRecords.filter(r => r.status === "Absent").length;
+  const excusedCount = todayRecords.filter(r => r.status === "Excused").length;
+
   const stats = [
-    { title: "إجمالي الموظفين", value: employees?.length || 0, icon: Users, color: "blue" as const, trend: "+12%", trendUp: true },
-    { title: "حضور اليوم", value: "85%", icon: CheckCircle, color: "green" as const, trend: "+5%", trendUp: true },
-    { title: "تأخيرات", value: "12", icon: Clock, color: "orange" as const, trend: "-2%", trendUp: true },
-    { title: "غياب", value: "5", icon: AlertTriangle, color: "red" as const, trend: "-1%", trendUp: false },
+    { title: "إجمالي الموظفين", value: employees?.length || 0, icon: Users, color: "blue" as const, trend: "", trendUp: true },
+    { title: "حضور اليوم", value: presentCount, icon: CheckCircle, color: "green" as const, trend: "", trendUp: true },
+    { title: "تأخيرات", value: lateCount, icon: Clock, color: "orange" as const, trend: "", trendUp: true },
+    { title: "غياب", value: absentCount, icon: AlertTriangle, color: "red" as const, trend: "", trendUp: false },
   ];
 
-  const chartData = [
-    { name: 'السبت', حضور: 40, غياب: 24 },
-    { name: 'الأحد', حضور: 30, غياب: 13 },
-    { name: 'الاثنين', حضور: 20, غياب: 98 },
-    { name: 'الثلاثاء', حضور: 27, غياب: 39 },
-    { name: 'الأربعاء', حضور: 18, غياب: 48 },
-    { name: 'الخميس', حضور: 23, غياب: 38 },
-  ];
+  const chartData = todayRecords.slice(0, 7).map(r => ({
+    name: employees?.find(e => e.code === r.employeeCode)?.nameAr || r.employeeCode,
+    ساعات: r.totalHours || 0
+  }));
 
   const pieData = [
-    { name: 'حضور', value: 400 },
-    { name: 'غياب', value: 30 },
-    { name: 'تأخير', value: 45 },
-    { name: 'إجازات', value: 20 },
+    { name: 'حضور', value: presentCount },
+    { name: 'غياب', value: absentCount },
+    { name: 'تأخير', value: lateCount },
+    { name: 'إجازات', value: excusedCount },
   ];
 
   return (
@@ -50,7 +57,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-border/50 shadow-sm">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold font-display">إحصائيات الحضور الأسبوعية</h3>
+                <h3 className="text-lg font-bold font-display">ساعات العمل للموظفين (اليوم)</h3>
                 <button className="text-sm text-primary font-medium hover:underline flex items-center gap-1" onClick={() => window.location.href = '/attendance'}>
                   عرض التقرير الكامل <ArrowUpRight className="w-4 h-4" />
                 </button>
@@ -65,8 +72,7 @@ export default function Dashboard() {
                       contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                       cursor={{fill: '#f1f5f9'}}
                     />
-                    <Bar dataKey="حضور" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={32} />
-                    <Bar dataKey="غياب" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={32} />
+                    <Bar dataKey="ساعات" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={32} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

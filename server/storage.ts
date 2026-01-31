@@ -7,7 +7,7 @@ import {
   attendanceRecords, type AttendanceRecord, type InsertAttendanceRecord
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Employees
@@ -36,7 +36,7 @@ export interface IStorage {
   getPunches(startDate: Date, endDate: Date, employeeCode?: string): Promise<BiometricPunch[]>;
 
   // Attendance
-  getAttendance(startDate: string, endDate: string, employeeCode?: string): Promise<AttendanceRecord[]>;
+  getAttendance(startDate: string, endDate: string, employeeCode?: string, limit?: number, offset?: number): Promise<{ data: AttendanceRecord[], total: number }>;
   createAttendanceRecord(record: InsertAttendanceRecord): Promise<AttendanceRecord>;
   updateAttendanceRecord(id: number, record: Partial<InsertAttendanceRecord>): Promise<AttendanceRecord>;
   
@@ -137,7 +137,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Attendance
-  async getAttendance(startDate: string, endDate: string, employeeCode?: string): Promise<AttendanceRecord[]> {
+  async getAttendance(startDate: string, endDate: string, employeeCode?: string, limit: number = 50, offset: number = 0): Promise<{ data: AttendanceRecord[], total: number }> {
     let conditions = [gte(attendanceRecords.date, startDate), lte(attendanceRecords.date, endDate)];
     if (employeeCode) {
       if (employeeCode.includes(',')) {
@@ -149,7 +149,19 @@ export class DatabaseStorage implements IStorage {
         conditions.push(eq(attendanceRecords.employeeCode, employeeCode.trim()));
       }
     }
-    return await db.select().from(attendanceRecords).where(and(...conditions));
+    
+    const [countResult] = await db.select({ 
+      count: sql<number>`count(*)` 
+    }).from(attendanceRecords).where(and(...conditions));
+
+    const data = await db.select()
+      .from(attendanceRecords)
+      .where(and(...conditions))
+      .limit(limit)
+      .offset(offset)
+      .orderBy(desc(attendanceRecords.date), desc(attendanceRecords.id));
+
+    return { data, total: Number(countResult?.count || 0) };
   }
 
   async createAttendanceRecord(insertRecord: InsertAttendanceRecord): Promise<AttendanceRecord> {

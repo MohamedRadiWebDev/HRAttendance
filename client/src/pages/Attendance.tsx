@@ -19,25 +19,20 @@ export default function Attendance() {
   });
   const [employeeFilter, setEmployeeFilter] = useState("");
   
-  const { data: records, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter);
+  const [page, setPage] = useState(1);
+  const limit = 50;
+  
+  const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit);
+  const records = recordsData?.data;
+  const total = recordsData?.total || 0;
+  const totalPages = Math.ceil(total / limit);
   const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
   const { toast } = useToast();
 
-  const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
-  const [sectorFilter, setSectorFilter] = useState("all");
-
-  const filteredRecords = records?.filter(record => {
-    if (sectorFilter !== "all") {
-      const emp = employees?.find(e => e.code === record.employeeCode);
-      return emp?.sector === sectorFilter;
-    }
-    return true;
-  });
-
   const handleProcess = () => {
     processAttendance.mutate({ startDate: dateRange.start, endDate: dateRange.end }, {
-      onSuccess: (data) => {
+      onSuccess: (data: any) => {
         toast({ title: "اكتملت المعالجة", description: data.message });
       }
     });
@@ -51,6 +46,17 @@ export default function Attendance() {
     XLSX.writeFile(workbook, `Attendance_${dateRange.start}_${dateRange.end}.xlsx`);
     toast({ title: "تم التصدير", description: "تم تحميل ملف الإكسل بنجاح" });
   };
+
+  const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
+  const [sectorFilter, setSectorFilter] = useState("all");
+
+  const filteredRecords = records?.filter(record => {
+    if (sectorFilter !== "all") {
+      const emp = employees?.find(e => e.code === record.employeeCode);
+      return emp?.sector === sectorFilter;
+    }
+    return true;
+  });
 
   return (
     <div className="flex h-screen bg-slate-50/50">
@@ -173,6 +179,30 @@ export default function Attendance() {
                 </tbody>
               </table>
             </div>
+
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-border/50 flex items-center justify-center gap-2 bg-white">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={page === 1} 
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  السابق
+                </Button>
+                <div className="text-sm font-medium">
+                  صفحة {page} من {totalPages}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={page === totalPages} 
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                >
+                  التالي
+                </Button>
+              </div>
+            )}
           </div>
         </main>
       </div>
