@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
+import { format, parse } from "date-fns";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertAdjustmentSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -119,25 +120,66 @@ function AddAdjustmentDialog() {
   const { toast } = useToast();
   const createAdjustment = useCreateAdjustment();
   const { data: employees } = useEmployees();
+  const sectors = useMemo(() => Array.from(new Set(employees?.map(emp => emp.sector).filter(Boolean) || [])), [employees]);
+  const [selectedSector, setSelectedSector] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState("");
   
   const form = useForm({
     resolver: zodResolver(insertAdjustmentSchema),
     defaultValues: {
       employeeCode: "",
       type: "annual",
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: "",
+      endDate: "",
       notes: "",
     }
   });
-  const selectedEmployee = employees?.find(emp => emp.code === form.watch("employeeCode"));
+  const departments = useMemo(() => {
+    return Array.from(
+      new Set(
+        employees
+          ?.filter(emp => (selectedSector ? emp.sector === selectedSector : true))
+          .map(emp => emp.department)
+          .filter(Boolean) || []
+      )
+    );
+  }, [employees, selectedSector]);
+  const filteredEmployees = useMemo(() => {
+    return employees?.filter(emp => {
+      if (selectedSector && emp.sector !== selectedSector) return false;
+      if (selectedDepartment && emp.department !== selectedDepartment) return false;
+      return true;
+    }) || [];
+  }, [employees, selectedSector, selectedDepartment]);
+
+  const parseDateInput = (value: string) => {
+    if (!value) return null;
+    const parsed = parse(value, "dd/MM/yyyy", new Date());
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+    const fallback = new Date(value);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+    return null;
+  };
 
   const onSubmit = (data: any) => {
-    createAdjustment.mutate(data, {
+    const startDate = parseDateInput(data.startDate);
+    const endDate = parseDateInput(data.endDate);
+    if (!startDate || !endDate) {
+      toast({ title: "خطأ", description: "يرجى إدخال تاريخ صحيح بصيغة dd/mm/yyyy", variant: "destructive" });
+      return;
+    }
+
+    createAdjustment.mutate({
+      ...data,
+      startDate: format(startDate, "yyyy-MM-dd"),
+      endDate: format(endDate, "yyyy-MM-dd"),
+    }, {
       onSuccess: () => {
         toast({ title: "تم الحفظ", description: "تم تسجيل الطلب بنجاح" });
         setOpen(false);
         form.reset();
+        setSelectedSector("");
+        setSelectedDepartment("");
       },
       onError: (err: any) => {
         toast({ title: "خطأ", description: err.message, variant: "destructive" });
@@ -159,6 +201,53 @@ function AddAdjustmentDialog() {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            <FormItem>
+              <FormLabel>القطاع</FormLabel>
+              <Select
+                onValueChange={(value) => {
+                  setSelectedSector(value);
+                  setSelectedDepartment("");
+                  form.setValue("employeeCode", "");
+                }}
+                value={selectedSector}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر القطاع" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {sectors.map(sector => (
+                    <SelectItem key={sector} value={sector as string}>
+                      {sector}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormItem>
+            <FormItem>
+              <FormLabel>الإدارة</FormLabel>
+              <Select
+                onValueChange={(value) => {
+                  setSelectedDepartment(value);
+                  form.setValue("employeeCode", "");
+                }}
+                value={selectedDepartment}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الإدارة" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {departments.map(dept => (
+                    <SelectItem key={dept} value={dept as string}>
+                      {dept}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormItem>
             <FormField
               control={form.control}
               name="employeeCode"
@@ -172,7 +261,7 @@ function AddAdjustmentDialog() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {employees?.map(emp => (
+                      {filteredEmployees.map(emp => (
                         <SelectItem key={emp.code} value={emp.code}>
                           {emp.code} - {emp.nameAr}
                         </SelectItem>
@@ -221,7 +310,7 @@ function AddAdjustmentDialog() {
                   <FormItem>
                     <FormLabel>من تاريخ</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="text" placeholder="dd/mm/yyyy" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -234,7 +323,7 @@ function AddAdjustmentDialog() {
                   <FormItem>
                     <FormLabel>إلى تاريخ</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="text" placeholder="dd/mm/yyyy" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

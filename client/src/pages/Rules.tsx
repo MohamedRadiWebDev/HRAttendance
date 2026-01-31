@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
+import { format, parse } from "date-fns";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertRuleSchema, RULE_TYPES } from "@shared/schema";
 
@@ -98,15 +99,34 @@ function AddRuleDialog() {
       name: "",
       priority: 0,
       scope: "all",
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate: "",
+      endDate: "",
       ruleType: "custom_shift",
       params: { shiftStart: "09:00", shiftEnd: "17:00" }
     }
   });
 
   const onSubmit = (data: any) => {
-    createRule.mutate(data, {
+    const parseDateInput = (value: string) => {
+      if (!value) return null;
+      const parsed = parse(value, "dd/MM/yyyy", new Date());
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+      const fallback = new Date(value);
+      if (!Number.isNaN(fallback.getTime())) return fallback;
+      return null;
+    };
+    const startDate = parseDateInput(data.startDate);
+    const endDate = parseDateInput(data.endDate);
+    if (!startDate || !endDate) {
+      toast({ title: "خطأ", description: "يرجى إدخال تاريخ صحيح بصيغة dd/mm/yyyy", variant: "destructive" });
+      return;
+    }
+
+    createRule.mutate({
+      ...data,
+      startDate: format(startDate, "yyyy-MM-dd"),
+      endDate: format(endDate, "yyyy-MM-dd"),
+    }, {
       onSuccess: () => {
         toast({ title: "نجاح", description: "تمت إضافة القاعدة بنجاح" });
         setOpen(false);
@@ -167,10 +187,10 @@ function AddRuleDialog() {
               <FormField
                 control={form.control}
                 name="startDate"
-                render={({ field }) => (
+              render={({ field }) => (
                   <FormItem>
                     <FormLabel>من تاريخ</FormLabel>
-                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormControl><Input type="text" placeholder="dd/mm/yyyy" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -181,7 +201,7 @@ function AddRuleDialog() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>إلى تاريخ</FormLabel>
-                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormControl><Input type="text" placeholder="dd/mm/yyyy" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

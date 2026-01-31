@@ -4,15 +4,23 @@ import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import type { AttendanceRecord, InsertBiometricPunch } from "@shared/schema";
 
-export function useAttendanceRecords(startDate?: string, endDate?: string, employeeCode?: string, page: number = 1, limit: number = 0) {
-  // Default to current month if no dates provided
+export function useAttendanceRecords(
+  startDate?: string,
+  endDate?: string,
+  employeeCode?: string,
+  page: number = 1,
+  limit: number = 0,
+  useDefaultRange: boolean = true
+) {
   const now = new Date();
   const defaultStart = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
   const defaultEnd = format(new Date(now.getFullYear(), now.getMonth() + 1, 0), "yyyy-MM-dd");
+  const effectiveStart = useDefaultRange ? (startDate || defaultStart) : startDate;
+  const effectiveEnd = useDefaultRange ? (endDate || defaultEnd) : endDate;
 
   const queryParams = new URLSearchParams();
-  if (startDate || defaultStart) queryParams.append("startDate", startDate || defaultStart);
-  if (endDate || defaultEnd) queryParams.append("endDate", endDate || defaultEnd);
+  if (effectiveStart) queryParams.append("startDate", effectiveStart);
+  if (effectiveEnd) queryParams.append("endDate", effectiveEnd);
   if (employeeCode) queryParams.append("employeeCode", employeeCode);
   queryParams.append("page", page.toString());
   queryParams.append("limit", limit.toString());
@@ -20,7 +28,8 @@ export function useAttendanceRecords(startDate?: string, endDate?: string, emplo
   const url = `${api.attendance.list.path}?${queryParams.toString()}`;
 
   return useQuery({
-    queryKey: [api.attendance.list.path, startDate, endDate, employeeCode, page, limit],
+    queryKey: [api.attendance.list.path, effectiveStart, effectiveEnd, employeeCode, page, limit, useDefaultRange],
+    enabled: !!effectiveStart && !!effectiveEnd,
     queryFn: async () => {
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch attendance");

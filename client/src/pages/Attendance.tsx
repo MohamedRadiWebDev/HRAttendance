@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { RefreshCw, Download, Search } from "lucide-react";
 import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
 import { useEmployees } from "@/hooks/use-employees";
-import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { format, startOfMonth, endOfMonth, parse } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,25 +15,36 @@ import * as XLSX from 'xlsx';
 
 export default function Attendance() {
   const [location, setLocation] = useLocation();
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date();
-    return {
-      start: format(startOfMonth(now), "yyyy-MM-dd"),
-      end: format(endOfMonth(now), "yyyy-MM-dd")
-    };
-  });
+  const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({});
+  const [dateInput, setDateInput] = useState({ start: "", end: "" });
   const [employeeFilter, setEmployeeFilter] = useState("");
   
   const [page, setPage] = useState(1);
   const limit = 0;
   
-  const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit);
+  const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit, false);
   const records = recordsData?.data;
   const total = recordsData?.total || 0;
   const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
   const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
   const { toast } = useToast();
+
+  const parseDateInput = (value: string) => {
+    if (!value) return null;
+    const parsed = parse(value, "dd/MM/yyyy", new Date());
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+    const fallback = new Date(value);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+    return null;
+  };
+
+  const formatDisplayDate = (value?: string) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return format(parsed, "dd/MM/yyyy");
+  };
 
   useEffect(() => {
     const queryString = location.split("?")[1] || "";
@@ -42,18 +53,22 @@ export default function Attendance() {
     const endDate = params.get("endDate");
     const storedStart = localStorage.getItem("attendanceStartDate");
     const storedEnd = localStorage.getItem("attendanceEndDate");
-    const fallbackStart = storedStart || format(startOfMonth(new Date()), "yyyy-MM-dd");
-    const fallbackEnd = storedEnd || format(endOfMonth(new Date()), "yyyy-MM-dd");
-    const nextStart = startDate || fallbackStart;
-    const nextEnd = endDate || fallbackEnd;
+    const nextStart = startDate || storedStart || "";
+    const nextEnd = endDate || storedEnd || "";
 
     setDateRange((prev) => {
       if (prev.start === nextStart && prev.end === nextEnd) return prev;
       return { start: nextStart, end: nextEnd };
     });
+
+    setDateInput({
+      start: formatDisplayDate(nextStart),
+      end: formatDisplayDate(nextEnd),
+    });
   }, [location]);
 
   useEffect(() => {
+    if (!dateRange.start || !dateRange.end) return;
     const params = new URLSearchParams();
     params.set("startDate", dateRange.start);
     params.set("endDate", dateRange.end);
@@ -61,6 +76,10 @@ export default function Attendance() {
     localStorage.setItem("attendanceEndDate", dateRange.end);
     setLocation(`/attendance?${params.toString()}`, { replace: true });
   }, [dateRange, setLocation]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [dateRange.start, dateRange.end, employeeFilter, sectorFilter]);
 
   const handleProcess = () => {
     processAttendance.mutate({ startDate: dateRange.start, endDate: dateRange.end }, {
@@ -102,16 +121,32 @@ export default function Attendance() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 bg-slate-50 border border-border rounded-lg p-1">
                   <Input 
-                    type="date" 
-                    value={dateRange.start}
-                    onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    type="text"
+                    placeholder="dd/mm/yyyy"
+                    value={dateInput.start}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setDateInput(prev => ({ ...prev, start: value }));
+                      const parsed = parseDateInput(value);
+                      if (parsed) {
+                        setDateRange(prev => ({ ...prev, start: format(parsed, "yyyy-MM-dd") }));
+                      }
+                    }}
                     className="border-none bg-transparent h-8 w-36"
                   />
                   <span className="text-muted-foreground">-</span>
                   <Input 
-                    type="date" 
-                    value={dateRange.end}
-                    onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    type="text"
+                    placeholder="dd/mm/yyyy"
+                    value={dateInput.end}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setDateInput(prev => ({ ...prev, end: value }));
+                      const parsed = parseDateInput(value);
+                      if (parsed) {
+                        setDateRange(prev => ({ ...prev, end: format(parsed, "yyyy-MM-dd") }));
+                      }
+                    }}
                     className="border-none bg-transparent h-8 w-36"
                   />
                 </div>
@@ -174,6 +209,8 @@ export default function Attendance() {
                 <tbody className="divide-y divide-border/50">
                   {isLoading ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center">جاري تحميل البيانات...</td></tr>
+                  ) : !dateRange.start || !dateRange.end ? (
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">يرجى تحديد الفترة أولاً.</td></tr>
                   ) : filteredRecords?.length === 0 ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة. جرّب معالجة الحضور بعد استيراد البصمة.</td></tr>
                   ) : (

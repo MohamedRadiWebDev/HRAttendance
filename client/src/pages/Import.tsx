@@ -109,7 +109,7 @@ export default function Import() {
           
           return {
             employeeCode,
-            punchDatetime: punchDatetime.toISOString(), // Send as string to avoid toISOString error on server
+            punchDatetime: format(punchDatetime, "yyyy-MM-dd'T'HH:mm:ss"),
           };
         }).filter(p => p.employeeCode && p.punchDatetime && p.punchDatetime !== "Invalid Date");
 
