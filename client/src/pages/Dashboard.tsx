@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { StatCard } from "@/components/StatCard";
+import { Button } from "@/components/ui/button";
 import { Users, Clock, AlertTriangle, CheckCircle, ArrowUpRight, Trash2 } from "lucide-react";
 import { useAttendanceRecords } from "@/hooks/use-attendance";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
