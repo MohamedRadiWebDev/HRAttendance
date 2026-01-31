@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import type { AttendanceRecord, InsertBiometricPunch } from "@shared/schema";
 
-export function useAttendanceRecords(startDate?: string, endDate?: string, employeeCode?: string) {
+export function useAttendanceRecords(startDate?: string, endDate?: string, employeeCode?: string, page: number = 1, limit: number = 50) {
   // Default to current month if no dates provided
   const now = new Date();
   const defaultStart = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
@@ -14,15 +14,17 @@ export function useAttendanceRecords(startDate?: string, endDate?: string, emplo
   if (startDate || defaultStart) queryParams.append("startDate", startDate || defaultStart);
   if (endDate || defaultEnd) queryParams.append("endDate", endDate || defaultEnd);
   if (employeeCode) queryParams.append("employeeCode", employeeCode);
+  queryParams.append("page", page.toString());
+  queryParams.append("limit", limit.toString());
 
   const url = `${api.attendance.list.path}?${queryParams.toString()}`;
 
   return useQuery({
-    queryKey: [api.attendance.list.path, startDate, endDate, employeeCode],
+    queryKey: [api.attendance.list.path, startDate, endDate, employeeCode, page, limit],
     queryFn: async () => {
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch attendance");
-      return api.attendance.list.responses[200].parse(await res.json());
+      return await res.json();
     },
   });
 }

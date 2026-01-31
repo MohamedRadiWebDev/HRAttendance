@@ -50,7 +50,7 @@ export default function Attendance() {
   const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
   const [sectorFilter, setSectorFilter] = useState("all");
 
-  const filteredRecords = records?.filter(record => {
+  const filteredRecords = records?.filter((record: any) => {
     if (sectorFilter !== "all") {
       const emp = employees?.find(e => e.code === record.employeeCode);
       return emp?.sector === sectorFilter;

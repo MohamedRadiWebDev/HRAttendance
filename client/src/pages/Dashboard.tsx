@@ -17,10 +17,10 @@ export default function Dashboard() {
   );
 
   const todayRecords = (attendanceData as any)?.data || [];
-  const presentCount = todayRecords.filter(r => r.status === "Present" || r.status === "Late").length;
-  const lateCount = todayRecords.filter(r => r.status === "Late").length;
-  const absentCount = todayRecords.filter(r => r.status === "Absent").length;
-  const excusedCount = todayRecords.filter(r => r.status === "Excused").length;
+  const presentCount = todayRecords.filter((r: any) => r.status === "Present" || r.status === "Late").length;
+  const lateCount = todayRecords.filter((r: any) => r.status === "Late").length;
+  const absentCount = todayRecords.filter((r: any) => r.status === "Absent").length;
+  const excusedCount = todayRecords.filter((r: any) => r.status === "Excused").length;
 
   const stats = [
     { title: "إجمالي الموظفين", value: employees?.length || 0, icon: Users, color: "blue" as const, trend: "", trendUp: true },
@@ -29,7 +29,7 @@ export default function Dashboard() {
     { title: "غياب", value: absentCount, icon: AlertTriangle, color: "red" as const, trend: "", trendUp: false },
   ];
 
-  const chartData = todayRecords.slice(0, 7).map(r => ({
+  const chartData = todayRecords.slice(0, 7).map((r: any) => ({
     name: employees?.find(e => e.code === r.employeeCode)?.nameAr || r.employeeCode,
     ساعات: r.totalHours || 0
   }));
