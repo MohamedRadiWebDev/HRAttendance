@@ -31,7 +31,7 @@ const DATE_FORMATS = [
   "yyyy-MM-dd HH:mm",
 ];
 
-const parseExcelDate = (value: unknown): { date: string, time: string, datetime: string } | null => {
+const parseExcelDate = (value: unknown): { punchDate: string, punchTime: string, punchDateTime: string } | null => {
   if (typeof value === "number") {
     // Excel serial math: datePart = floor(serial), timePart = serial - floor(serial)
     const datePart = Math.floor(value);
