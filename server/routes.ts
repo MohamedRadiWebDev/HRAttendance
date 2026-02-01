@@ -9,6 +9,35 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const parseOffsetMinutes = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const toLocalDate = (date: Date, offsetMinutes: number) =>
+    new Date(date.getTime() - offsetMinutes * 60 * 1000);
+  const formatDateWithOffset = (date: Date, offsetMinutes: number) => {
+    const local = toLocalDate(date, offsetMinutes);
+    const year = local.getUTCFullYear();
+    const month = String(local.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(local.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const formatUtcDate = (date: Date) => {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const parseEmployeeDate = (value?: string | null) => {
+    if (!value) return null;
+    const direct = new Date(value);
+    if (!Number.isNaN(direct.getTime())) return direct;
+    const parts = value.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (!parts) return null;
+    const [, day, month, year] = parts;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
 
   // Employees
   app.get(api.employees.list.path, async (req, res) => {
@@ -123,129 +152,190 @@ export async function registerRoutes(
     if (!startDate || !endDate) {
       return res.status(400).json({ message: "Start and End dates required" });
     }
-    const offset = (Number(page) - 1) * Number(limit);
+    const limitNumber = Number(limit);
+    const safeLimit = Number.isFinite(limitNumber) ? limitNumber : 0;
+    const offset = safeLimit > 0 ? (Number(page) - 1) * safeLimit : 0;
     const { data, total } = await storage.getAttendance(
       String(startDate), 
       String(endDate), 
       employeeCode as string,
-      Number(limit),
+      safeLimit,
       offset
     );
     res.json({ data, total, page: Number(page), limit: Number(limit) });
   });
 
   app.post(api.attendance.process.path, async (req, res) => {
-    const { startDate, endDate } = req.body;
+    const { startDate, endDate, timezoneOffsetMinutes } = req.body;
     try {
+      const offsetMinutes = parseOffsetMinutes(timezoneOffsetMinutes);
+      const formatDate = (date: Date) => formatDateWithOffset(date, offsetMinutes);
+      const formatLocalDay = (date: Date) => formatUtcDate(date);
+
       const allEmployees = await storage.getEmployees();
-      const punches = await storage.getPunches(new Date(startDate), new Date(endDate));
       const rules = await storage.getRules();
       const adjustments = await storage.getAdjustments();
-      
-      let processedCount = 0;
+
       const start = new Date(startDate);
       const end = new Date(endDate);
+      const startLocal = new Date(Date.UTC(
+        start.getUTCFullYear(),
+        start.getUTCMonth(),
+        start.getUTCDate()
+      ));
+      const endLocal = new Date(Date.UTC(
+        end.getUTCFullYear(),
+        end.getUTCMonth(),
+        end.getUTCDate()
+      ));
+
+      const punchStartUtc = Date.UTC(
+        startLocal.getUTCFullYear(),
+        startLocal.getUTCMonth(),
+        startLocal.getUTCDate()
+      ) + offsetMinutes * 60 * 1000;
+      const punchEndUtc = Date.UTC(
+        endLocal.getUTCFullYear(),
+        endLocal.getUTCMonth(),
+        endLocal.getUTCDate()
+      ) + offsetMinutes * 60 * 1000 + (24 * 60 * 60 * 1000 - 1);
+      const punchStart = new Date(punchStartUtc);
+      const punchEnd = new Date(punchEndUtc);
+      const punches = await storage.getPunches(punchStart, punchEnd);
+      const existingRecords = await storage.getAttendanceByRange(startDate, endDate);
+
+      const adjustmentsByEmployee = new Map<string, typeof adjustments>();
+      for (const adj of adjustments) {
+        const list = adjustmentsByEmployee.get(adj.employeeCode) || [];
+        list.push(adj);
+        adjustmentsByEmployee.set(adj.employeeCode, list);
+      }
+
+      const punchesByEmployeeDay = new Map<string, typeof punches>();
+      for (const punch of punches) {
+        const dateStr = formatDate(punch.punchDatetime);
+        const key = `${punch.employeeCode}-${dateStr}`;
+        const list = punchesByEmployeeDay.get(key) || [];
+        list.push(punch);
+        punchesByEmployeeDay.set(key, list);
+      }
+
+      const existingMap = new Map<string, (typeof existingRecords)[number]>();
+      for (const record of existingRecords) {
+        const key = `${record.employeeCode}-${record.date}`;
+        existingMap.set(key, record);
+      }
+
+      const getActiveRules = (employee: (typeof allEmployees)[number], dateStr: string) => {
+        return rules.filter(r => {
+          const ruleStart = new Date(r.startDate);
+          const ruleEnd = new Date(r.endDate);
+          const current = new Date(dateStr);
+          if (current < ruleStart || current > ruleEnd) return false;
+          if (r.scope === 'all') return true;
+          if (r.scope.startsWith('dept:') && employee.department === r.scope.replace('dept:', '')) return true;
+          if (r.scope.startsWith('sector:') && employee.sector === r.scope.replace('sector:', '')) return true;
+          if (r.scope.startsWith('emp:') && employee.code === r.scope.replace('emp:', '')) return true;
+          return false;
+        }).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+      };
+
+      const getAdjustmentForDate = (employeeCode: string, dateStr: string) => {
+        const list = adjustmentsByEmployee.get(employeeCode) || [];
+        return list.find(a => dateStr >= a.startDate && dateStr <= a.endDate) || null;
+      };
+
+      let processedCount = 0;
 
       for (const employee of allEmployees) {
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toISOString().split('T')[0];
-          
-          // 1. Get applicable rules for this employee and date
-          const activeRules = rules.filter(r => {
-            const ruleStart = new Date(r.startDate);
-            const ruleEnd = new Date(r.endDate);
-            const current = new Date(dateStr);
-            if (current < ruleStart || current > ruleEnd) return false;
-            
-            if (r.scope === 'all') return true;
-            if (r.scope.startsWith('dept:') && employee.department === r.scope.replace('dept:', '')) return true;
-            if (r.scope.startsWith('sector:') && employee.sector === r.scope.replace('sector:', '')) return true;
-            if (r.scope.startsWith('emp:') && employee.code === r.scope.replace('emp:', '')) return true;
-            return false;
-          }).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        for (let d = new Date(startLocal); d <= endLocal; d.setUTCDate(d.getUTCDate() + 1)) {
+          const dateStr = formatLocalDay(d);
 
-          // 2. Determine shift times based on rules or employee default
+          const activeRules = getActiveRules(employee, dateStr);
+          const isAttendanceExempt = activeRules.some(r => r.ruleType === 'attendance_exempt');
+
           let currentShiftStart = employee.shiftStart || "09:00";
           let currentShiftEnd = "17:00"; // Default 8 hours
-          
           const shiftRule = activeRules.find(r => r.ruleType === 'custom_shift');
           if (shiftRule) {
             currentShiftStart = (shiftRule.params as any).shiftStart || currentShiftStart;
             currentShiftEnd = (shiftRule.params as any).shiftEnd || currentShiftEnd;
           }
 
-          // 3. Check for leaves/adjustments
-          const activeAdj = adjustments.find(a => 
-            a.employeeCode === employee.code && 
-            dateStr >= a.startDate && 
-            dateStr <= a.endDate
-          );
+          const activeAdj = getAdjustmentForDate(employee.code, dateStr);
 
-          const dayPunches = punches.filter(p => 
-            p.employeeCode === employee.code && 
-            p.punchDatetime.toISOString().split('T')[0] === dateStr
-          ).sort((a, b) => a.punchDatetime.getTime() - b.punchDatetime.getTime());
+          const dayPunches = (punchesByEmployeeDay.get(`${employee.code}-${dateStr}`) || [])
+            .sort((a, b) => a.punchDatetime.getTime() - b.punchDatetime.getTime());
+          const checkIn = dayPunches.length > 0 ? dayPunches[0].punchDatetime : null;
+          const checkOut = dayPunches.length > 1 ? dayPunches[dayPunches.length - 1].punchDatetime : null;
 
-          if (dayPunches.length > 0 || activeAdj) {
-            const checkIn = dayPunches.length > 0 ? dayPunches[0].punchDatetime : null;
-            const checkOut = dayPunches.length > 1 ? dayPunches[dayPunches.length - 1].punchDatetime : null;
-            
-            let totalHours = 0;
-            if (checkIn && checkOut) {
-              totalHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-            }
+          const existingRecord = existingMap.get(`${employee.code}-${dateStr}`);
+          const manualCompLeave = Boolean(existingRecord?.fridayCompLeaveManual);
+          const isFriday = new Date(`${dateStr}T00:00:00Z`).getUTCDay() === 5;
+          const isCollectionSector = (employee.sector || "") === "التحصيل";
 
-            let penalties = [];
-            let status = activeAdj ? "Excused" : "Present";
-            const shiftStartParts = currentShiftStart.split(':');
-            const shiftStart = new Date(d);
-            shiftStart.setHours(parseInt(shiftStartParts[0]), parseInt(shiftStartParts[1]), 0);
-
-            if (!activeAdj && checkIn) {
-              const lateMinutes = Math.floor((checkIn.getTime() - shiftStart.getTime()) / (1000 * 60));
-              if (lateMinutes >= 16) {
-                status = "Late";
-                let latePenalty = 0;
-                if (lateMinutes > 60) latePenalty = 1;
-                else if (lateMinutes > 30) latePenalty = 0.5;
-                else latePenalty = 0.25;
-                
-                penalties.push({ type: "تأخير", value: latePenalty, minutes: lateMinutes });
-              } else {
-                status = "Present";
-              }
-            } else if (!activeAdj && !checkIn) {
-              status = "Absent";
-              penalties.push({ type: "غياب", value: 1 });
-            }
-
-            await storage.createAttendanceRecord({
-              employeeCode: employee.code,
-              date: dateStr,
-              checkIn,
-              checkOut,
-              totalHours,
-              status,
-              overtimeHours: Math.max(0, totalHours - 8),
-              penalties,
-              isOvernight: activeRules.some(r => r.ruleType === 'overtime_overnight')
-            });
-            processedCount++;
-          } else {
-            // Absent
-             await storage.createAttendanceRecord({
-              employeeCode: employee.code,
-              date: dateStr,
-              checkIn: null,
-              checkOut: null,
-              totalHours: 0,
-              status: "Absent",
-              overtimeHours: 0,
-              penalties: [],
-              isOvernight: false
-            });
-            processedCount++;
+          let fridayCompLeave = false;
+          if (manualCompLeave) {
+            fridayCompLeave = Boolean(existingRecord?.fridayCompLeave);
+          } else if (isFriday && isCollectionSector) {
+            fridayCompLeave = true;
           }
+
+          let totalHours = 0;
+          if (checkIn && checkOut) {
+            totalHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+          }
+
+          let penalties: any[] = [];
+          let status = fridayCompLeave || activeAdj ? "Excused" : "Present";
+          const shiftStartParts = currentShiftStart.split(':');
+          const shiftStartUtc = Date.UTC(
+            d.getUTCFullYear(),
+            d.getUTCMonth(),
+            d.getUTCDate(),
+            parseInt(shiftStartParts[0]),
+            parseInt(shiftStartParts[1]),
+            0
+          ) + offsetMinutes * 60 * 1000;
+
+          if (!fridayCompLeave && !activeAdj && checkIn) {
+            const diffMs = checkIn.getTime() - shiftStartUtc;
+            const lateMinutes = Math.max(0, Math.ceil(diffMs / (1000 * 60)));
+            if (diffMs > 15 * 60 * 1000) {
+              status = "Late";
+              let latePenalty = 0;
+              if (lateMinutes > 60) latePenalty = 1;
+              else if (lateMinutes > 30) latePenalty = 0.5;
+              else latePenalty = 0.25;
+              penalties.push({ type: "تأخير", value: latePenalty, minutes: lateMinutes });
+            } else {
+              status = "Present";
+            }
+          } else if (!fridayCompLeave && !activeAdj && !checkIn) {
+            status = "Absent";
+            penalties.push({ type: "غياب", value: 1 });
+          }
+
+          if (fridayCompLeave) {
+            penalties = [];
+          }
+
+          await storage.createAttendanceRecord({
+            employeeCode: employee.code,
+            date: dateStr,
+            checkIn,
+            checkOut,
+            totalHours,
+            status,
+            overtimeHours: Math.max(0, totalHours - 8),
+            penalties,
+            isOvernight: activeRules.some(r => r.ruleType === 'overtime_overnight'),
+            fridayCompLeave,
+            fridayCompLeaveManual: manualCompLeave && fridayCompLeave,
+            fridayCompLeaveNote: existingRecord?.fridayCompLeaveNote || null,
+            fridayCompLeaveUpdatedBy: existingRecord?.fridayCompLeaveUpdatedBy || null,
+          });
+          processedCount++;
         }
       }
 
@@ -254,6 +344,32 @@ export async function registerRoutes(
       console.error("Processing Error:", err);
       res.status(500).json({ message: "Failed to process attendance", error: err.message });
     }
+  });
+
+  app.patch(api.attendance.fridayCompLeave.path, async (req, res) => {
+    const { enabled, note, updatedBy } = api.attendance.fridayCompLeave.input.parse(req.body);
+    const recordId = Number(req.params.id);
+    const record = await storage.getAttendanceRecord(recordId);
+    if (!record) {
+      return res.status(404).json({ message: "Attendance record not found" });
+    }
+    const shouldExcuse = enabled;
+    const status = shouldExcuse
+      ? "Excused"
+      : record.status === "Excused"
+        ? (record.checkIn ? "Present" : "Absent")
+        : record.status;
+    const penalties = shouldExcuse ? [] : record.penalties;
+
+    const updated = await storage.updateAttendanceRecord(recordId, {
+      fridayCompLeave: enabled,
+      fridayCompLeaveManual: enabled,
+      fridayCompLeaveNote: note ?? record.fridayCompLeaveNote ?? null,
+      fridayCompLeaveUpdatedBy: updatedBy ?? record.fridayCompLeaveUpdatedBy ?? null,
+      status,
+      penalties,
+    });
+    res.json(updated);
   });
 
   // Import

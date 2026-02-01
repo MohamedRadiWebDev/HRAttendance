@@ -141,9 +141,22 @@ export const api = {
       input: z.object({
         startDate: z.string(),
         endDate: z.string(),
+        timezoneOffsetMinutes: z.number().optional(),
       }),
       responses: {
         200: z.object({ message: z.string(), processedCount: z.number() }),
+      },
+    },
+    fridayCompLeave: {
+      method: 'PATCH' as const,
+      path: '/api/attendance/:id/friday-comp-leave',
+      input: z.object({
+        enabled: z.boolean(),
+        note: z.string().optional(),
+        updatedBy: z.string().optional(),
+      }),
+      responses: {
+        200: z.custom<typeof attendanceRecords.$inferSelect>(),
       },
     },
   },
