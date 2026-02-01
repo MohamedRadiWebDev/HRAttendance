@@ -1,0 +1,57 @@
+TASK
+Fix the fingerprint import so that the parsed datetime values preserve the ORIGINAL expected format and types used by the system before the Friday feature and before the new parser.
+
+IMPORTANT CONTEXT
+Fingerprint Excel headers are exactly:
+- "كود"
+- "التاريخ_والوقت"
+
+PROBLEM
+After the new parser, you normalize datetime in a way that breaks how attendance calculations and Excel exports behave (e.g., times appear as strings/ISO, wrong locale, wrong day/month, wrong time format, or Excel cells no longer behave as true date/time).
+
+REQUIREMENTS (NON-NEGOTIABLE)
+
+1) Preserve value types (Excel-like behavior)
+- Internally, store punch datetime as a real Date object (JS Date) AND also store:
+  - punchDateKey: "YYYY-MM-DD"
+  - punchTimeValue: a numeric Excel-time fraction OR a stable "HH:mm:ss" string
+- Do NOT store only ISO strings in a way that breaks sorting/comparisons.
+- All comparisons (min/max punches) must be done using Date timestamps, not string compare.
+
+2) Restore ORIGINAL display format used previously in the UI + exports
+- Wherever the system shows or exports time fields derived from punches (check-in/out, first/last stamp):
+  - They must render exactly like before (e.g., "HH:mm" or "HH:mm:ss" — match existing UI and template).
+  - They must export as real Excel date/time cells, not plain text.
+
+3) Excel export cell typing (CRITICAL)
+When generating .xlsx:
+- Dates must be written as Excel date cells (type = number with date format) or as Date objects supported by your Excel writer library.
+- Times must be written as Excel time cells (number = fraction of day) with a time format like "hh:mm" or "hh:mm:ss".
+- Do NOT write ISO text for date/time cells unless the original template expects text.
+- Keep the template’s number formats where applicable.
+
+4) Parsing rules (do not change headers or mapping)
+- employee_code = value under "كود" (stringify, trim)
+- punch_datetime = value under "التاريخ_والوقت"
+- Handle:
+  A) Excel datetime cells (numbers): convert using Excel serial rules and timezone-safe logic
+  B) Text datetime cells: parse robustly for formats like "16/12/2025 12:06 AM"
+- IMPORTANT: Ensure day/month parsing is correct for dd/MM/yyyy (Egypt style), not MM/dd.
+
+5) Backward compatibility
+- The same fingerprint file that worked before must produce identical check-in/check-out results and identical exported attendance sheet cell types/formatting.
+
+6) Verification steps you MUST do
+- Upload the provided fingerprint file (البصمة.xlsx) and verify:
+  - check-in/out computed correctly (earliest/latest)
+  - UI shows correct times (no ISO strings)
+  - exported Excel opens with correct date/time cells (Excel recognizes them; you can change format in Excel and it behaves like a real time/date)
+- Add/adjust unit tests:
+  - Excel serial datetime parsing
+  - dd/MM text parsing
+  - export cell type assertions (date/time must not be strings)
+
+DO NOT
+- Do not add any Friday/sector logic into fingerprint parsing.
+- Do not require master data for fingerprint upload.
+- Do not alter attendance penalty logic.

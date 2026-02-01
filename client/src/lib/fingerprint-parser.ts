@@ -112,16 +112,12 @@ export const parseFingerprintWorksheet = (worksheet: XLSX.WorkSheet) => {
       return;
     }
 
-    const punchDate = format(parsedDate, "yyyy-MM-dd");
-    const punchTime = format(parsedDate, "HH:mm:ss");
-    const punchDateTime = format(parsedDate, "yyyy-MM-dd'T'HH:mm:ss");
-
     valid.push({
       employeeCode,
-      punchDatetime: punchDateTime,
-      punchDate,
-      punchTime,
-      punchDateTime,
+      punchDatetime: parsedDate.toISOString(),
+      punchDate: format(parsedDate, "yyyy-MM-dd"),
+      punchTime: format(parsedDate, "HH:mm:ss"),
+      punchDateTime: format(parsedDate, "yyyy-MM-dd'T'HH:mm:ss"),
     });
   });
 

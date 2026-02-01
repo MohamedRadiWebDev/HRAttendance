@@ -103,8 +103,38 @@ export default function Attendance() {
 
   const handleExport = () => {
     if (!records || records.length === 0) return;
-    const worksheet = XLSX.utils.json_to_sheet(records);
     const workbook = XLSX.utils.book_new();
+    
+    // Prepare data for Excel with typed cells
+    const exportData = records.map(record => ({
+      "التاريخ": record.date,
+      "كود الموظف": record.employeeCode,
+      "الدخول": record.checkIn ? new Date(record.checkIn) : null,
+      "الخروج": record.checkOut ? new Date(record.checkOut) : null,
+      "ساعات العمل": record.totalHours,
+      "الإضافي": record.overtimeHours,
+      "الحالة": record.status,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData, { dateNF: 'yyyy-mm-dd', cellDates: true });
+    
+    // Set column widths and formats
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_col(C) + "1";
+      if (!worksheet[address]) continue;
+      
+      // Add time format to Check-In/Out columns
+      if (worksheet[address].v === "الدخول" || worksheet[address].v === "الخروج") {
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+          const cell = worksheet[XLSX.utils.encode_cell({r: R, c: C})];
+          if (cell && cell.t === 'd') {
+            cell.z = "hh:mm:ss";
+          }
+        }
+      }
+    }
+
     XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
     XLSX.writeFile(workbook, `Attendance_${dateRange.start}_${dateRange.end}.xlsx`);
     toast({ title: "تم التصدير", description: "تم تحميل ملف الإكسل بنجاح" });
