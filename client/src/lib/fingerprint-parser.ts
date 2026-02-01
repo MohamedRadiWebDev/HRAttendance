@@ -31,30 +31,45 @@ const DATE_FORMATS = [
   "yyyy-MM-dd HH:mm",
 ];
 
-const parseExcelDate = (value: unknown): Date | null => {
-  if (value instanceof Date) {
-    return value;
-  }
+const parseExcelDate = (value: unknown): { date: string, time: string, datetime: string } | null => {
   if (typeof value === "number") {
-    const ssf = (XLSX as typeof XLSX & { SSF?: { parse_date_code?: (v: number) => any } }).SSF;
-    if (ssf?.parse_date_code) {
-      const parsed = ssf.parse_date_code(value);
-      if (!parsed) return null;
-      return new Date(parsed.y, parsed.m - 1, parsed.d, parsed.H, parsed.M, parsed.S || 0);
-    }
+    // Excel serial math: datePart = floor(serial), timePart = serial - floor(serial)
+    const datePart = Math.floor(value);
+    const timePart = value - datePart;
+    
+    // datePart to YYYY-MM-DD (Excel epoch is 1899-12-30)
     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const date = new Date(excelEpoch.getTime() + value * 24 * 60 * 60 * 1000);
-    return date;
+    const d = new Date(excelEpoch.getTime() + datePart * 24 * 60 * 60 * 1000);
+    const punchDate = format(d, "yyyy-MM-dd");
+    
+    // timePart to HH:mm:ss
+    const totalSeconds = Math.round(timePart * 24 * 60 * 60);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const punchTime = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    
+    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}` };
   }
+  
   if (typeof value === "string") {
     const trimmed = value.trim();
     for (const fmt of DATE_FORMATS) {
       const parsed = parseDate(trimmed, fmt, new Date());
-      if (isValid(parsed)) return parsed;
+      if (isValid(parsed)) {
+        const punchDate = format(parsed, "yyyy-MM-dd");
+        const punchTime = format(parsed, "HH:mm:ss");
+        return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}` };
+      }
     }
-    const fallback = new Date(trimmed);
-    if (isValid(fallback)) return fallback;
   }
+  
+  if (value instanceof Date && isValid(value)) {
+    const punchDate = format(value, "yyyy-MM-dd");
+    const punchTime = format(value, "HH:mm:ss");
+    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}` };
+  }
+
   return null;
 };
 
@@ -106,18 +121,18 @@ export const parseFingerprintWorksheet = (worksheet: XLSX.WorkSheet) => {
       return;
     }
 
-    const parsedDate = parseExcelDate(datetimeValue);
-    if (!parsedDate || !isValid(parsedDate)) {
+    const result = parseExcelDate(datetimeValue);
+    if (!result) {
       invalid.push({ rowIndex, reason: "تاريخ/وقت غير صالح", raw });
       return;
     }
 
     valid.push({
       employeeCode,
-      punchDatetime: parsedDate.toISOString(),
-      punchDate: format(parsedDate, "yyyy-MM-dd"),
-      punchTime: format(parsedDate, "HH:mm:ss"),
-      punchDateTime: format(parsedDate, "yyyy-MM-dd'T'HH:mm:ss"),
+      punchDatetime: result.punchDateTime,
+      punchDate: result.punchDate,
+      punchTime: result.punchTime,
+      punchDateTime: result.punchDateTime,
     });
   });
 

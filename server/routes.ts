@@ -213,7 +213,13 @@ export async function registerRoutes(
 
       const punchesByEmployeeDay = new Map<string, typeof punches>();
       for (const punch of punches) {
-        const dateStr = formatDate(punch.punchDatetime);
+        // Use the ISO string from DB (local wall-clock date/time) to group
+        const punchLocal = punch.punchDatetime;
+        const year = punchLocal.getUTCFullYear();
+        const month = String(punchLocal.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(punchLocal.getUTCDate()).padStart(2, "0");
+        const dateStr = `${year}-${month}-${day}`;
+        
         const key = `${punch.employeeCode}-${dateStr}`;
         const list = punchesByEmployeeDay.get(key) || [];
         list.push(punch);
@@ -377,9 +383,16 @@ export async function registerRoutes(
     try {
       const punches = z.array(z.object({
         employeeCode: z.string(),
-        punchDatetime: z.string().transform(val => new Date(val)),
+        punchDatetime: z.string(), // Local YYYY-MM-DDTHH:mm:ss
       })).parse(req.body);
-      const result = await storage.createPunchesBulk(punches);
+      
+      const mappedPunches = punches.map(p => ({
+        employeeCode: p.employeeCode,
+        // Treat as local wall-clock time. Store as is.
+        punchDatetime: new Date(p.punchDatetime + "Z") // Z suffix ensures it's read exactly as the digits say but stored in DB as timestamp
+      }));
+      
+      const result = await storage.createPunchesBulk(mappedPunches);
       res.json({ message: "Imported punches", count: result.length });
     } catch (err) {
       console.error("Import Punches Error:", err);
