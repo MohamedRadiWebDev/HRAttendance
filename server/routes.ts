@@ -28,25 +28,6 @@ export async function registerRoutes(
     const day = String(date.getUTCDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
-  const getMonthKey = (date: Date) => {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    return `${year}-${month}`;
-  };
-  const getMonthStart = (monthKey: string) => {
-    const [year, month] = monthKey.split("-").map(Number);
-    return new Date(Date.UTC(year, month - 1, 1));
-  };
-  const getMonthEnd = (monthKey: string) => {
-    const [year, month] = monthKey.split("-").map(Number);
-    return new Date(Date.UTC(year, month, 0));
-  };
-  const getPreviousMonthKey = (monthKey: string) => {
-    const [year, month] = monthKey.split("-").map(Number);
-    const date = new Date(Date.UTC(year, month - 1, 1));
-    date.setUTCMonth(date.getUTCMonth() - 1);
-    return getMonthKey(date);
-  };
   const parseEmployeeDate = (value?: string | null) => {
     if (!value) return null;
     const direct = new Date(value);
@@ -190,19 +171,10 @@ export async function registerRoutes(
       const offsetMinutes = parseOffsetMinutes(timezoneOffsetMinutes);
       const formatDate = (date: Date) => formatDateWithOffset(date, offsetMinutes);
       const formatLocalDay = (date: Date) => formatUtcDate(date);
-      const formatPlainDate = (date: Date) => {
-        const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        return formatUtcDate(utc);
-      };
 
       const allEmployees = await storage.getEmployees();
       const rules = await storage.getRules();
       const adjustments = await storage.getAdjustments();
-      const settings = await storage.getFridayPolicySettings();
-      const includedSectors = Array.isArray(settings.includedSectors) ? settings.includedSectors : [];
-      const allowedOffDays = Array.isArray(settings.allowedOffDaysNextMonth)
-        ? settings.allowedOffDaysNextMonth.map((value: number) => Number(value)).filter((value: number) => Number.isFinite(value))
-        : [];
 
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -217,20 +189,15 @@ export async function registerRoutes(
         end.getUTCDate()
       ));
 
-      const startMonthKey = getMonthKey(startLocal);
-      const endMonthKey = getMonthKey(endLocal);
-      const prevMonthKey = getPreviousMonthKey(startMonthKey);
-      const punchRangeStart = getMonthStart(prevMonthKey);
-      const punchRangeEnd = getMonthEnd(endMonthKey);
       const punchStartUtc = Date.UTC(
-        punchRangeStart.getUTCFullYear(),
-        punchRangeStart.getUTCMonth(),
-        punchRangeStart.getUTCDate()
+        startLocal.getUTCFullYear(),
+        startLocal.getUTCMonth(),
+        startLocal.getUTCDate()
       ) + offsetMinutes * 60 * 1000;
       const punchEndUtc = Date.UTC(
-        punchRangeEnd.getUTCFullYear(),
-        punchRangeEnd.getUTCMonth(),
-        punchRangeEnd.getUTCDate()
+        endLocal.getUTCFullYear(),
+        endLocal.getUTCMonth(),
+        endLocal.getUTCDate()
       ) + offsetMinutes * 60 * 1000 + (24 * 60 * 60 * 1000 - 1);
       const punchStart = new Date(punchStartUtc);
       const punchEnd = new Date(punchEndUtc);
@@ -254,20 +221,9 @@ export async function registerRoutes(
       }
 
       const existingMap = new Map<string, (typeof existingRecords)[number]>();
-      const usedCompLeaveByEmployeeMonth = new Map<string, Set<string>>();
       for (const record of existingRecords) {
         const key = `${record.employeeCode}-${record.date}`;
         existingMap.set(key, record);
-        if (record.fridayCompLeave) {
-          const dayNumber = Number(record.date.slice(8, 10));
-          if (allowedOffDays.includes(dayNumber)) {
-            const monthKey = record.date.slice(0, 7);
-            const usedKey = `${record.employeeCode}-${monthKey}`;
-            const set = usedCompLeaveByEmployeeMonth.get(usedKey) || new Set<string>();
-            set.add(record.date);
-            usedCompLeaveByEmployeeMonth.set(usedKey, set);
-          }
-        }
       }
 
       const getActiveRules = (employee: (typeof allEmployees)[number], dateStr: string) => {
@@ -284,105 +240,9 @@ export async function registerRoutes(
         }).sort((a, b) => (b.priority || 0) - (a.priority || 0));
       };
 
-      const isWithinEmployment = (employee: (typeof allEmployees)[number], dateStr: string) => {
-        const hireDate = parseEmployeeDate(employee.hireDate);
-        if (hireDate && dateStr < formatPlainDate(hireDate)) return false;
-        const terminationDate = parseEmployeeDate(employee.terminationDate);
-        if (terminationDate && dateStr > formatPlainDate(terminationDate)) return false;
-        return true;
-      };
-
       const getAdjustmentForDate = (employeeCode: string, dateStr: string) => {
         const list = adjustmentsByEmployee.get(employeeCode) || [];
         return list.find(a => dateStr >= a.startDate && dateStr <= a.endDate) || null;
-      };
-
-      const fridayBankCache = new Map<string, {
-        eligibleWorkedFridays: number;
-        creditGranted: number;
-        requiredFridays: number;
-        missingFridays: number;
-      }>();
-
-      const computeFridayBank = (employee: (typeof allEmployees)[number], baseMonthKey: string) => {
-        const cacheKey = `${employee.code}-${baseMonthKey}`;
-        const cached = fridayBankCache.get(cacheKey);
-        if (cached) return cached;
-        if (!includedSectors.includes(employee.sector || "")) {
-          const empty = {
-            eligibleWorkedFridays: 0,
-            creditGranted: 0,
-            requiredFridays: settings.monthlyMinimumFridaysRequired,
-            missingFridays: settings.monthlyMinimumFridaysRequired,
-          };
-          fridayBankCache.set(cacheKey, empty);
-          return empty;
-        }
-
-        const monthStart = getMonthStart(baseMonthKey);
-        const monthEnd = getMonthEnd(baseMonthKey);
-        let eligibleWorkedFridays = 0;
-
-        for (let d = new Date(monthStart); d <= monthEnd; d.setUTCDate(d.getUTCDate() + 1)) {
-          if (d.getUTCDay() !== 5) continue;
-          const dateStr = formatUtcDate(d);
-          if (!isWithinEmployment(employee, dateStr)) continue;
-          const activeRules = getActiveRules(employee, dateStr);
-          if (activeRules.some(r => r.ruleType === 'attendance_exempt')) continue;
-          const adjustment = getAdjustmentForDate(employee.code, dateStr);
-          const dayPunches = punchesByEmployeeDay.get(`${employee.code}-${dateStr}`) || [];
-          const hasPunch = dayPunches.length > 0;
-          let worked = false;
-
-          if (adjustment?.type === "mission") {
-            worked = settings.countMissionAsWorkedFriday;
-          } else if (adjustment?.type === "permission") {
-            worked = settings.countPermissionOnlyAsWorkedFriday;
-          } else if (adjustment && adjustment.type !== "mission" && adjustment.type !== "permission") {
-            worked = settings.countLeaveAsWorkedFriday;
-          } else if (hasPunch) {
-            worked = settings.countBiometricAsWorkedFriday;
-          }
-
-          if (worked) eligibleWorkedFridays++;
-        }
-
-        const creditGranted = Math.min(eligibleWorkedFridays, settings.maxCreditPerMonth);
-        const missingFridays = Math.max(0, settings.monthlyMinimumFridaysRequired - eligibleWorkedFridays);
-        const record = {
-          eligibleWorkedFridays,
-          creditGranted,
-          requiredFridays: settings.monthlyMinimumFridaysRequired,
-          missingFridays,
-        };
-        fridayBankCache.set(cacheKey, record);
-        return record;
-      };
-
-      const policyStateCache = new Map<string, {
-        remainingCredit: number;
-        missingFridays: number;
-        usedDates: Set<string>;
-        extraOffDays: number;
-      }>();
-
-      const getPolicyState = (employee: (typeof allEmployees)[number], monthKey: string) => {
-        const cacheKey = `${employee.code}-${monthKey}`;
-        const cached = policyStateCache.get(cacheKey);
-        if (cached) return cached;
-        const prevKey = getPreviousMonthKey(monthKey);
-        const bank = computeFridayBank(employee, prevKey);
-        const usedKey = `${employee.code}-${monthKey}`;
-        const usedDates = new Set<string>(usedCompLeaveByEmployeeMonth.get(usedKey) || []);
-        const remainingCredit = Math.max(0, bank.creditGranted - usedDates.size);
-        const state = {
-          remainingCredit,
-          missingFridays: bank.missingFridays,
-          usedDates,
-          extraOffDays: 0,
-        };
-        policyStateCache.set(cacheKey, state);
-        return state;
       };
 
       let processedCount = 0;
@@ -411,28 +271,14 @@ export async function registerRoutes(
 
           const existingRecord = existingMap.get(`${employee.code}-${dateStr}`);
           const manualCompLeave = Boolean(existingRecord?.fridayCompLeaveManual);
-          const monthKey = dateStr.slice(0, 7);
-          const dayNumber = Number(dateStr.slice(8, 10));
-          const policyApplies = includedSectors.includes(employee.sector || "");
-          const isAllowedDay = allowedOffDays.includes(dayNumber);
-          const isOffDay = !checkIn && !activeAdj && !isAttendanceExempt;
+          const isFriday = new Date(`${dateStr}T00:00:00Z`).getUTCDay() === 5;
+          const isCollectionSector = (employee.sector || "") === "التحصيل";
 
           let fridayCompLeave = false;
-          if (manualCompLeave && existingRecord?.fridayCompLeave) {
+          if (manualCompLeave) {
+            fridayCompLeave = Boolean(existingRecord?.fridayCompLeave);
+          } else if (isFriday && isCollectionSector) {
             fridayCompLeave = true;
-          } else if (policyApplies && isAllowedDay && isOffDay) {
-            const state = getPolicyState(employee, monthKey);
-            if (!state.usedDates.has(dateStr)) {
-              if (state.remainingCredit > 0) {
-                fridayCompLeave = true;
-                state.remainingCredit -= 1;
-                state.usedDates.add(dateStr);
-              } else {
-                state.extraOffDays += 1;
-              }
-            } else {
-              fridayCompLeave = true;
-            }
           }
 
           let totalHours = 0;
@@ -486,6 +332,8 @@ export async function registerRoutes(
             isOvernight: activeRules.some(r => r.ruleType === 'overtime_overnight'),
             fridayCompLeave,
             fridayCompLeaveManual: manualCompLeave && fridayCompLeave,
+            fridayCompLeaveNote: existingRecord?.fridayCompLeaveNote || null,
+            fridayCompLeaveUpdatedBy: existingRecord?.fridayCompLeaveUpdatedBy || null,
           });
           processedCount++;
         }
@@ -499,7 +347,7 @@ export async function registerRoutes(
   });
 
   app.patch(api.attendance.fridayCompLeave.path, async (req, res) => {
-    const { enabled } = api.attendance.fridayCompLeave.input.parse(req.body);
+    const { enabled, note, updatedBy } = api.attendance.fridayCompLeave.input.parse(req.body);
     const recordId = Number(req.params.id);
     const record = await storage.getAttendanceRecord(recordId);
     if (!record) {
@@ -516,239 +364,12 @@ export async function registerRoutes(
     const updated = await storage.updateAttendanceRecord(recordId, {
       fridayCompLeave: enabled,
       fridayCompLeaveManual: enabled,
+      fridayCompLeaveNote: note ?? record.fridayCompLeaveNote ?? null,
+      fridayCompLeaveUpdatedBy: updatedBy ?? record.fridayCompLeaveUpdatedBy ?? null,
       status,
       penalties,
     });
-    await storage.createAuditLog({
-      employeeCode: record.employeeCode,
-      date: record.date,
-      action: "friday_comp_leave_toggle",
-      details: { previous: record.fridayCompLeave, next: enabled },
-    });
     res.json(updated);
-  });
-
-  app.get(api.fridayPolicy.settings.path, async (_req, res) => {
-    const settings = await storage.getFridayPolicySettings();
-    res.json(settings);
-  });
-
-  app.put(api.fridayPolicy.update.path, async (req, res) => {
-    const settings = await storage.updateFridayPolicySettings(req.body || {});
-    res.json(settings);
-  });
-
-  app.get(api.fridayPolicy.report.path, async (req, res) => {
-    const monthParam = typeof req.query.month === "string" ? req.query.month : "";
-    if (!monthParam) {
-      return res.status(400).json({ message: "Month is required" });
-    }
-    const offsetMinutes = parseOffsetMinutes(req.query.timezoneOffsetMinutes);
-    const settings = await storage.getFridayPolicySettings();
-    const includedSectors = Array.isArray(settings.includedSectors) ? settings.includedSectors : [];
-    const allowedOffDays = Array.isArray(settings.allowedOffDaysNextMonth)
-      ? settings.allowedOffDaysNextMonth.map((value: number) => Number(value)).filter((value: number) => Number.isFinite(value))
-      : [];
-
-    const allEmployees = await storage.getEmployees();
-    const rules = await storage.getRules();
-    const adjustments = await storage.getAdjustments();
-
-    const monthKey = monthParam;
-    const prevMonthKey = getPreviousMonthKey(monthKey);
-    const rangeStart = getMonthStart(prevMonthKey);
-    const rangeEnd = getMonthEnd(monthKey);
-    const punchStartUtc = Date.UTC(
-      rangeStart.getUTCFullYear(),
-      rangeStart.getUTCMonth(),
-      rangeStart.getUTCDate()
-    ) + offsetMinutes * 60 * 1000;
-    const punchEndUtc = Date.UTC(
-      rangeEnd.getUTCFullYear(),
-      rangeEnd.getUTCMonth(),
-      rangeEnd.getUTCDate()
-    ) + offsetMinutes * 60 * 1000 + (24 * 60 * 60 * 1000 - 1);
-    const punches = await storage.getPunches(new Date(punchStartUtc), new Date(punchEndUtc));
-
-    const adjustmentsByEmployee = new Map<string, typeof adjustments>();
-    for (const adj of adjustments) {
-      const list = adjustmentsByEmployee.get(adj.employeeCode) || [];
-      list.push(adj);
-      adjustmentsByEmployee.set(adj.employeeCode, list);
-    }
-
-    const punchesByEmployeeDay = new Map<string, typeof punches>();
-    for (const punch of punches) {
-      const dateStr = formatDateWithOffset(punch.punchDatetime, offsetMinutes);
-      const key = `${punch.employeeCode}-${dateStr}`;
-      const list = punchesByEmployeeDay.get(key) || [];
-      list.push(punch);
-      punchesByEmployeeDay.set(key, list);
-    }
-
-    const monthStart = getMonthStart(monthKey);
-    const monthEnd = getMonthEnd(monthKey);
-    const attendanceRecords = await storage.getAttendanceByRange(formatUtcDate(monthStart), formatUtcDate(monthEnd));
-    const attendanceMap = new Map<string, (typeof attendanceRecords)[number]>();
-    for (const record of attendanceRecords) {
-      attendanceMap.set(`${record.employeeCode}-${record.date}`, record);
-    }
-
-    const getActiveRules = (employee: (typeof allEmployees)[number], dateStr: string) => {
-      return rules.filter(r => {
-        const ruleStart = new Date(r.startDate);
-        const ruleEnd = new Date(r.endDate);
-        const current = new Date(dateStr);
-        if (current < ruleStart || current > ruleEnd) return false;
-        if (r.scope === 'all') return true;
-        if (r.scope.startsWith('dept:') && employee.department === r.scope.replace('dept:', '')) return true;
-        if (r.scope.startsWith('sector:') && employee.sector === r.scope.replace('sector:', '')) return true;
-        if (r.scope.startsWith('emp:') && employee.code === r.scope.replace('emp:', '')) return true;
-        return false;
-      }).sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    };
-
-    const getAdjustmentForDate = (employeeCode: string, dateStr: string) => {
-      const list = adjustmentsByEmployee.get(employeeCode) || [];
-      return list.find(a => dateStr >= a.startDate && dateStr <= a.endDate) || null;
-    };
-
-    const formatPlainDate = (date: Date) => {
-      const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-      return formatUtcDate(utc);
-    };
-    const isWithinEmployment = (employee: (typeof allEmployees)[number], dateStr: string) => {
-      const hireDate = parseEmployeeDate(employee.hireDate);
-      if (hireDate && dateStr < formatPlainDate(hireDate)) return false;
-      const terminationDate = parseEmployeeDate(employee.terminationDate);
-      if (terminationDate && dateStr > formatPlainDate(terminationDate)) return false;
-      return true;
-    };
-
-    const computeFridayBank = (employee: (typeof allEmployees)[number], baseMonthKey: string) => {
-      const monthStart = getMonthStart(baseMonthKey);
-      const monthEnd = getMonthEnd(baseMonthKey);
-      let eligibleWorkedFridays = 0;
-      const fridayDetails: Array<{ date: string; worked: boolean; reason: string }> = [];
-
-      for (let d = new Date(monthStart); d <= monthEnd; d.setUTCDate(d.getUTCDate() + 1)) {
-        if (d.getUTCDay() !== 5) continue;
-        const dateStr = formatUtcDate(d);
-        if (!isWithinEmployment(employee, dateStr)) {
-          fridayDetails.push({ date: dateStr, worked: false, reason: "خارج الخدمة" });
-          continue;
-        }
-        const activeRules = getActiveRules(employee, dateStr);
-        if (activeRules.some(r => r.ruleType === 'attendance_exempt')) {
-          fridayDetails.push({ date: dateStr, worked: false, reason: "معفى" });
-          continue;
-        }
-        const adjustment = getAdjustmentForDate(employee.code, dateStr);
-        const dayPunches = punchesByEmployeeDay.get(`${employee.code}-${dateStr}`) || [];
-        const hasPunch = dayPunches.length > 0;
-        let worked = false;
-        let reason = "غير محتسب";
-
-        if (adjustment?.type === "mission") {
-          worked = settings.countMissionAsWorkedFriday;
-          reason = worked ? "مامورية" : "مامورية (غير محتسبة)";
-        } else if (adjustment?.type === "permission") {
-          worked = settings.countPermissionOnlyAsWorkedFriday;
-          reason = worked ? "إذن" : "إذن (غير محتسب)";
-        } else if (adjustment && adjustment.type !== "mission" && adjustment.type !== "permission") {
-          worked = settings.countLeaveAsWorkedFriday;
-          reason = worked ? "إجازة" : "إجازة";
-        } else if (hasPunch) {
-          worked = settings.countBiometricAsWorkedFriday;
-          reason = worked ? "بصمة" : "بصمة (غير محتسبة)";
-        }
-
-        if (worked) eligibleWorkedFridays++;
-        fridayDetails.push({ date: dateStr, worked, reason });
-      }
-
-      const creditGranted = Math.min(eligibleWorkedFridays, settings.maxCreditPerMonth);
-      const missingFridays = Math.max(0, settings.monthlyMinimumFridaysRequired - eligibleWorkedFridays);
-      return {
-        eligibleWorkedFridays,
-        creditGranted,
-        requiredFridays: settings.monthlyMinimumFridaysRequired,
-        missingFridays,
-        fridayDetails,
-      };
-    };
-
-    const records = allEmployees
-      .filter(employee => includedSectors.includes(employee.sector || ""))
-      .map(employee => {
-        const bank = computeFridayBank(employee, prevMonthKey);
-        let remainingCredit = bank.creditGranted;
-        const usedDates: string[] = [];
-        let extraOffDays = 0;
-        const usageDetails: Array<{ date: string; action: string; reason: string }> = [];
-
-        for (let d = new Date(monthStart); d <= monthEnd; d.setUTCDate(d.getUTCDate() + 1)) {
-          const dateStr = formatUtcDate(d);
-          if (!isWithinEmployment(employee, dateStr)) continue;
-          const dayNumber = Number(dateStr.slice(8, 10));
-          if (!allowedOffDays.includes(dayNumber)) continue;
-
-          const activeRules = getActiveRules(employee, dateStr);
-          const isAttendanceExempt = activeRules.some(r => r.ruleType === 'attendance_exempt');
-          const adjustment = getAdjustmentForDate(employee.code, dateStr);
-          const dayPunches = punchesByEmployeeDay.get(`${employee.code}-${dateStr}`) || [];
-          const hasManualCompLeave = Boolean(attendanceMap.get(`${employee.code}-${dateStr}`)?.fridayCompLeave);
-
-          const offDay = dayPunches.length === 0 && !adjustment && !isAttendanceExempt;
-          if (!offDay && !hasManualCompLeave) continue;
-
-          if (hasManualCompLeave) {
-            usedDates.push(dateStr);
-            usageDetails.push({ date: dateStr, action: "إجازة بدل الجمعة", reason: "يدوي" });
-            if (remainingCredit > 0) {
-              remainingCredit -= 1;
-            } else {
-              extraOffDays += 1;
-            }
-          } else if (remainingCredit > 0) {
-            remainingCredit -= 1;
-            usedDates.push(dateStr);
-            usageDetails.push({ date: dateStr, action: "إجازة بدل الجمعة", reason: "رصيد" });
-          } else {
-            extraOffDays += 1;
-            usageDetails.push({ date: dateStr, action: "خصم بدل الجمعة", reason: "بدون رصيد" });
-          }
-        }
-
-        const deductionDaysFromMissingFridays = bank.missingFridays;
-        const deductionDaysFromExtraOffDays = extraOffDays;
-        const totalFridayPolicyDeductionDays = deductionDaysFromMissingFridays + deductionDaysFromExtraOffDays;
-
-        return {
-          employeeCode: employee.code,
-          employeeName: employee.nameAr,
-          sector: employee.sector,
-          department: employee.department,
-          eligibleWorkedFridays: bank.eligibleWorkedFridays,
-          creditGranted: bank.creditGranted,
-          requiredFridays: bank.requiredFridays,
-          missingFridays: bank.missingFridays,
-          usedDaysCount: usedDates.length,
-          remainingCredit,
-          deductionDaysFromMissingFridays,
-          deductionDaysFromExtraOffDays,
-          totalFridayPolicyDeductionDays,
-          fridayDetails: bank.fridayDetails,
-          usageDetails,
-        };
-      });
-
-    res.json({
-      month: monthKey,
-      previousMonth: prevMonthKey,
-      settings,
-      records,
-    });
   });
 
   // Import

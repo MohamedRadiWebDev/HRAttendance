@@ -11,7 +11,7 @@ import Import from "@/pages/Import";
 import Rules from "@/pages/Rules";
 import Templates from "@/pages/Templates";
 import Adjustments from "@/pages/Adjustments";
-import FridayPolicy from "@/pages/FridayPolicy";
+import FridayControl from "@/pages/FridayControl";
 
 function Router() {
   return (
@@ -23,7 +23,7 @@ function Router() {
       <Route path="/rules" component={Rules} />
       <Route path="/templates" component={Templates} />
       <Route path="/adjustments" component={Adjustments} />
-      <Route path="/friday-policy" component={FridayPolicy} />
+      <Route path="/friday-control" component={FridayControl} />
       <Route component={NotFound} />
     </Switch>
   );

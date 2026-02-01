@@ -43,13 +43,6 @@ export interface IStorage {
   createAttendanceRecord(record: InsertAttendanceRecord): Promise<AttendanceRecord>;
   updateAttendanceRecord(id: number, record: Partial<InsertAttendanceRecord>): Promise<AttendanceRecord>;
   getAttendanceRecord(id: number): Promise<AttendanceRecord | undefined>;
-
-  // Friday policy settings
-  getFridayPolicySettings(): Promise<FridayPolicySettings>;
-  updateFridayPolicySettings(settings: Partial<InsertFridayPolicySettings>): Promise<FridayPolicySettings>;
-
-  // Audit logs
-  createAuditLog(log: { employeeCode: string; date: string; action: string; details?: unknown }): Promise<void>;
   
   // Bulk operations for import
   createEmployeesBulk(employees: InsertEmployee[]): Promise<Employee[]>;
@@ -248,32 +241,6 @@ export class DatabaseStorage implements IStorage {
     return record;
   }
 
-  async getFridayPolicySettings(): Promise<FridayPolicySettings> {
-    const [settings] = await db.select().from(fridayPolicySettings).limit(1);
-    if (settings) return settings;
-    const defaults = this.getDefaultFridayPolicySettings();
-    const [created] = await db.insert(fridayPolicySettings).values(defaults).returning();
-    return created;
-  }
-
-  async updateFridayPolicySettings(settings: Partial<InsertFridayPolicySettings>): Promise<FridayPolicySettings> {
-    const existing = await this.getFridayPolicySettings();
-    const [updated] = await db
-      .update(fridayPolicySettings)
-      .set(settings)
-      .where(eq(fridayPolicySettings.id, existing.id))
-      .returning();
-    return updated;
-  }
-
-  async createAuditLog(log: { employeeCode: string; date: string; action: string; details?: unknown }): Promise<void> {
-    await db.insert(auditLogs).values({
-      employeeCode: log.employeeCode,
-      date: log.date,
-      action: log.action,
-      details: log.details ?? null,
-    });
-  }
 
   // Bulk
   async createEmployeesBulk(insertEmployees: InsertEmployee[]): Promise<Employee[]> {

@@ -256,7 +256,13 @@ export default function Attendance() {
                               size="sm"
                               className="w-fit h-7 text-[10px] px-2"
                               disabled={toggleFridayCompLeave.isPending}
-                              onClick={() => toggleFridayCompLeave.mutate({ id: record.id, enabled: !record.fridayCompLeave })}
+                              onClick={() =>
+                                toggleFridayCompLeave.mutate({
+                                  id: record.id,
+                                  enabled: !record.fridayCompLeave,
+                                  updatedBy: "يدوي",
+                                })
+                              }
                             >
                               {record.fridayCompLeave ? "إلغاء بدل الجمعة" : "تفعيل بدل الجمعة"}
                             </Button>

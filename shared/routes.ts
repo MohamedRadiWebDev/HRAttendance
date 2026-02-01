@@ -153,37 +153,11 @@ export const api = {
       path: '/api/attendance/:id/friday-comp-leave',
       input: z.object({
         enabled: z.boolean(),
+        note: z.string().optional(),
+        updatedBy: z.string().optional(),
       }),
       responses: {
         200: z.custom<typeof attendanceRecords.$inferSelect>(),
-      },
-    },
-  },
-  fridayPolicy: {
-    settings: {
-      method: 'GET' as const,
-      path: '/api/friday-policy/settings',
-      responses: {
-        200: z.custom<typeof fridayPolicySettings.$inferSelect>(),
-      },
-    },
-    update: {
-      method: 'PUT' as const,
-      path: '/api/friday-policy/settings',
-      input: z.custom<Partial<typeof fridayPolicySettings.$inferInsert>>(),
-      responses: {
-        200: z.custom<typeof fridayPolicySettings.$inferSelect>(),
-      },
-    },
-    report: {
-      method: 'GET' as const,
-      path: '/api/friday-policy/report',
-      input: z.object({
-        month: z.string(),
-        timezoneOffsetMinutes: z.string().optional(),
-      }).optional(),
-      responses: {
-        200: z.any(),
       },
     },
   },

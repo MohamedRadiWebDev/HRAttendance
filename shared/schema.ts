@@ -79,15 +79,8 @@ export const attendanceRecords = pgTable("attendance_records", {
   isOvernight: boolean("is_overnight").default(false),
   fridayCompLeave: boolean("friday_comp_leave").default(false),
   fridayCompLeaveManual: boolean("friday_comp_leave_manual").default(false),
-});
-
-export const auditLogs = pgTable("audit_logs", {
-  id: serial("id").primaryKey(),
-  employeeCode: text("employee_code").notNull(),
-  date: text("date").notNull(),
-  action: text("action").notNull(),
-  details: jsonb("details"),
-  timestamp: timestamp("timestamp").defaultNow(),
+  fridayCompLeaveNote: text("friday_comp_leave_note"),
+  fridayCompLeaveUpdatedBy: text("friday_comp_leave_updated_by"),
 });
 
 export const fridayPolicySettings = pgTable("friday_policy_settings", {
