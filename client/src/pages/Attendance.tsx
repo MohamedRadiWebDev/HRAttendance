@@ -125,11 +125,13 @@ export default function Attendance() {
       const address = XLSX.utils.encode_col(C) + "1";
       if (!worksheet[address]) continue;
       
-      // Add time format to Check-In/Out columns
-      if (worksheet[address].v === "الدخول" || worksheet[address].v === "الخروج") {
+      const headerValue = worksheet[address].v;
+      // Use both Arabic and any other possible variants
+      if (headerValue === "الدخول" || headerValue === "الخروج") {
         for (let R = range.s.r + 1; R <= range.e.r; ++R) {
           const cell = worksheet[XLSX.utils.encode_cell({r: R, c: C})];
           if (cell && cell.t === 'd') {
+            // Excel time format fraction
             cell.z = "hh:mm:ss";
           }
         }

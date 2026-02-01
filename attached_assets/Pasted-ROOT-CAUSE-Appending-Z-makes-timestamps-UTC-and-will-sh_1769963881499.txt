@@ -1,0 +1,61 @@
+ROOT CAUSE
+Appending "Z" makes timestamps UTC and will shift date/time when parsed by Date(), especially around midnight.
+Any usage of:
+- "Z" suffix
+- Date.toISOString()
+- new Date(isoStringWithZ)
+will reintroduce the day rollover bug.
+
+TASK
+Fix fingerprint handling with a strict "NO TIMEZONE" rule:
+- Treat all attendance datetimes as local wall-clock values.
+- Store them as plain components and compare using numeric seconds, NOT Date objects.
+
+NON-NEGOTIABLE REQUIREMENTS
+
+1) REMOVE all server/backend logic
+- Delete or completely bypass server/routes.ts and /api/import/punches usage.
+- Fingerprint import must run entirely in the browser.
+
+2) Data representation (single source of truth)
+For each punch row store ONLY:
+- employeeCode: string
+- punchDate: "YYYY-MM-DD"
+- punchTime: "HH:mm:ss"
+- punchDateTimeKey: "YYYY-MM-DDTHH:mm:ss"   (NO timezone, NO Z)
+- punchSeconds: number (0..86399) derived from punchTime
+Optionally:
+- punchSortKey: `${punchDate}|${punchSeconds}` or number for sorting
+DO NOT store JS Date objects as the main truth.
+
+3) Parsing rules (must not shift days)
+A) Excel serial datetime numbers:
+- Convert using serial math WITHOUT Date() timezone conversion:
+  - daySerial = floor(serial)
+  - timeFraction = serial - daySerial
+  - Convert daySerial to YYYY-MM-DD using Excel 1900 date system
+  - Convert timeFraction to seconds = round(timeFraction * 86400)
+  - seconds -> HH:mm:ss
+B) Text datetime like "16/12/2025 12:06 AM":
+- Parse as dd/MM/yyyy
+- Convert 12h clock to 24h correctly
+- Output punchDate + punchTime exactly
+
+4) Grouping and min/max
+- Group by (employeeCode, punchDate)
+- Check-in = min(punchSeconds)
+- Check-out = max(punchSeconds)
+Never group by Date() or timestampMs derived from timezone-affected parsing.
+
+5) UI and exports
+- Display punchDate/punchTime directly.
+- When exporting to Excel:
+  - Write date and time as Excel-typed cells:
+    - date: Excel date number or Date constructed carefully from components WITHOUT timezone shift
+    - time: number fraction (seconds/86400)
+  - Do NOT write ISO strings with Z.
+
+6) Tests (must be added/updated)
+- A punch at "16/12/2025 00:06" must remain punchDate=2025-12-16, punchTime=00:06:00
+- Ensure no output contains 'Z' anywhere.
+- Ensure check-in/out for midnight punches matches the old behavior.

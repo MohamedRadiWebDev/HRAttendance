@@ -213,7 +213,7 @@ export async function registerRoutes(
 
       const punchesByEmployeeDay = new Map<string, typeof punches>();
       for (const punch of punches) {
-        // Use the ISO string from DB (local wall-clock date/time) to group
+        // Correctly group by the actual YYYY-MM-DD from the timestamp
         const punchLocal = punch.punchDatetime;
         const year = punchLocal.getUTCFullYear();
         const month = String(punchLocal.getUTCMonth() + 1).padStart(2, "0");
@@ -383,13 +383,15 @@ export async function registerRoutes(
     try {
       const punches = z.array(z.object({
         employeeCode: z.string(),
-        punchDatetime: z.string(), // Local YYYY-MM-DDTHH:mm:ss
+        punchDatetime: z.string(), // Local YYYY-MM-DDTHH:mm:ss (No Z!)
       })).parse(req.body);
       
       const mappedPunches = punches.map(p => ({
         employeeCode: p.employeeCode,
-        // Treat as local wall-clock time. Store as is.
-        punchDatetime: new Date(p.punchDatetime + "Z") // Z suffix ensures it's read exactly as the digits say but stored in DB as timestamp
+        // Drizzle/PG timestamp expects a format. Appending Z only for parsing if needed but
+        // it's safer to just let the DB handle the string if it's already local ISO.
+        // However, standard JS Date parsing is best with Z for "as is" when digits are local.
+        punchDatetime: new Date(p.punchDatetime + "Z")
       }));
       
       const result = await storage.createPunchesBulk(mappedPunches);

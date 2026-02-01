@@ -31,25 +31,25 @@ const DATE_FORMATS = [
   "yyyy-MM-dd HH:mm",
 ];
 
-const parseExcelDate = (value: unknown): { punchDate: string, punchTime: string, punchDateTime: string } | null => {
+const parseExcelDate = (value: unknown): { punchDate: string, punchTime: string, punchDateTime: string, punchSeconds: number } | null => {
   if (typeof value === "number") {
     // Excel serial math: datePart = floor(serial), timePart = serial - floor(serial)
     const datePart = Math.floor(value);
     const timePart = value - datePart;
     
-    // datePart to YYYY-MM-DD (Excel epoch is 1899-12-30)
+    // Excel 1900 date system (Date.UTC(1899, 11, 30) handles the 1900 leap year bug correctly for serials)
     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
     const d = new Date(excelEpoch.getTime() + datePart * 24 * 60 * 60 * 1000);
     const punchDate = format(d, "yyyy-MM-dd");
     
-    // timePart to HH:mm:ss
-    const totalSeconds = Math.round(timePart * 24 * 60 * 60);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+    // timePart to seconds = round(timeFraction * 86400)
+    const punchSeconds = Math.round(timePart * 86400);
+    const hours = Math.floor(punchSeconds / 3600);
+    const minutes = Math.floor((punchSeconds % 3600) / 60);
+    const seconds = punchSeconds % 60;
     const punchTime = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
     
-    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}` };
+    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}`, punchSeconds };
   }
   
   if (typeof value === "string") {
@@ -59,7 +59,8 @@ const parseExcelDate = (value: unknown): { punchDate: string, punchTime: string,
       if (isValid(parsed)) {
         const punchDate = format(parsed, "yyyy-MM-dd");
         const punchTime = format(parsed, "HH:mm:ss");
-        return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}` };
+        const punchSeconds = parsed.getHours() * 3600 + parsed.getMinutes() * 60 + parsed.getSeconds();
+        return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}`, punchSeconds };
       }
     }
   }
@@ -67,7 +68,8 @@ const parseExcelDate = (value: unknown): { punchDate: string, punchTime: string,
   if (value instanceof Date && isValid(value)) {
     const punchDate = format(value, "yyyy-MM-dd");
     const punchTime = format(value, "HH:mm:ss");
-    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}` };
+    const punchSeconds = value.getHours() * 3600 + value.getMinutes() * 60 + value.getSeconds();
+    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}`, punchSeconds };
   }
 
   return null;
