@@ -223,6 +223,11 @@ export async function registerRoutes(
             currentShiftEnd = (shiftRule.params as any).shiftEnd || currentShiftEnd;
           }
 
+          // Force 9:00 AM as default if it's 11:00 AM (fixing legacy data)
+          if (currentShiftStart === "11:00") {
+            currentShiftStart = "09:00";
+          }
+
           // 3. Check for leaves/adjustments
           const activeAdj = adjustments.find(a => 
             a.employeeCode === employee.code && 
