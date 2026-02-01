@@ -77,6 +77,17 @@ export default function Attendance() {
     setLocation(`/attendance?${params.toString()}`, { replace: true });
   }, [dateRange, setLocation]);
 
+  const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
+  const [sectorFilter, setSectorFilter] = useState("all");
+
+  const filteredRecords = records?.filter((record: any) => {
+    if (sectorFilter !== "all") {
+      const emp = employees?.find(e => e.code === record.employeeCode);
+      return emp?.sector === sectorFilter;
+    }
+    return true;
+  });
+
   useEffect(() => {
     setPage(1);
   }, [dateRange.start, dateRange.end, employeeFilter, sectorFilter]);
@@ -97,17 +108,6 @@ export default function Attendance() {
     XLSX.writeFile(workbook, `Attendance_${dateRange.start}_${dateRange.end}.xlsx`);
     toast({ title: "تم التصدير", description: "تم تحميل ملف الإكسل بنجاح" });
   };
-
-  const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
-  const [sectorFilter, setSectorFilter] = useState("all");
-
-  const filteredRecords = records?.filter((record: any) => {
-    if (sectorFilter !== "all") {
-      const emp = employees?.find(e => e.code === record.employeeCode);
-      return emp?.sector === sectorFilter;
-    }
-    return true;
-  });
 
   return (
     <div className="flex h-screen bg-slate-50/50">
