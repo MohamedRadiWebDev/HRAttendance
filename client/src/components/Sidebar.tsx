@@ -16,6 +16,7 @@ const navigation = [
   { name: 'الحضور والانصراف', href: '/attendance', icon: CalendarCheck },
   { name: 'التسويات والإجازات', href: '/adjustments', icon: Briefcase },
   { name: 'القواعد والورديات', href: '/rules', icon: Settings },
+  { name: 'سياسة الجمعة', href: '/friday-policy', icon: CalendarCheck },
   { name: 'نماذج الاكسل', href: '/templates', icon: FileSpreadsheet },
   { name: 'استيراد بيانات', href: '/import', icon: Upload },
 ];

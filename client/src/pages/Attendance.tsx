@@ -1,34 +1,97 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar as CalendarIcon, RefreshCw, Download, Search } from "lucide-react";
-import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
+import { RefreshCw, Download, Search } from "lucide-react";
+import { useAttendanceRecords, useProcessAttendance, useToggleFridayCompLeave } from "@/hooks/use-attendance";
 import { useEmployees } from "@/hooks/use-employees";
-import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { format, startOfMonth, endOfMonth, parse } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as XLSX from 'xlsx';
 
 export default function Attendance() {
-  const [dateRange, setDateRange] = useState({
-    start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
-    end: format(endOfMonth(new Date()), "yyyy-MM-dd")
-  });
+  const [location, setLocation] = useLocation();
+  const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({});
+  const [dateInput, setDateInput] = useState({ start: "", end: "" });
   const [employeeFilter, setEmployeeFilter] = useState("");
   
   const [page, setPage] = useState(1);
   const limit = 50;
   
-  const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit);
+  const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit, false);
   const records = recordsData?.data;
   const total = recordsData?.total || 0;
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
   const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
+  const toggleFridayCompLeave = useToggleFridayCompLeave();
   const { toast } = useToast();
+
+  const parseDateInput = (value: string) => {
+    if (!value) return null;
+    const parsed = parse(value, "dd/MM/yyyy", new Date());
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+    const fallback = new Date(value);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+    return null;
+  };
+
+  const formatDisplayDate = (value?: string) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return format(parsed, "dd/MM/yyyy");
+  };
+
+  useEffect(() => {
+    const queryString = location.split("?")[1] || "";
+    const params = new URLSearchParams(queryString);
+    const startDate = params.get("startDate");
+    const endDate = params.get("endDate");
+    const storedStart = localStorage.getItem("attendanceStartDate");
+    const storedEnd = localStorage.getItem("attendanceEndDate");
+    const nextStart = startDate || storedStart || "";
+    const nextEnd = endDate || storedEnd || "";
+
+    setDateRange((prev) => {
+      if (prev.start === nextStart && prev.end === nextEnd) return prev;
+      return { start: nextStart, end: nextEnd };
+    });
+
+    setDateInput({
+      start: formatDisplayDate(nextStart),
+      end: formatDisplayDate(nextEnd),
+    });
+  }, [location]);
+
+  useEffect(() => {
+    if (!dateRange.start || !dateRange.end) return;
+    const params = new URLSearchParams();
+    params.set("startDate", dateRange.start);
+    params.set("endDate", dateRange.end);
+    localStorage.setItem("attendanceStartDate", dateRange.start);
+    localStorage.setItem("attendanceEndDate", dateRange.end);
+    setLocation(`/attendance?${params.toString()}`, { replace: true });
+  }, [dateRange, setLocation]);
+
+  const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
+  const [sectorFilter, setSectorFilter] = useState("all");
+
+  const filteredRecords = records?.filter((record: any) => {
+    if (sectorFilter !== "all") {
+      const emp = employees?.find(e => e.code === record.employeeCode);
+      return emp?.sector === sectorFilter;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    setPage(1);
+  }, [dateRange.start, dateRange.end, employeeFilter, sectorFilter]);
 
   const handleProcess = () => {
     processAttendance.mutate({ startDate: dateRange.start, endDate: dateRange.end }, {
@@ -47,17 +110,6 @@ export default function Attendance() {
     toast({ title: "تم التصدير", description: "تم تحميل ملف الإكسل بنجاح" });
   };
 
-  const sectors = Array.from(new Set(employees?.map(e => e.sector).filter(Boolean) || []));
-  const [sectorFilter, setSectorFilter] = useState("all");
-
-  const filteredRecords = records?.filter((record: any) => {
-    if (sectorFilter !== "all") {
-      const emp = employees?.find(e => e.code === record.employeeCode);
-      return emp?.sector === sectorFilter;
-    }
-    return true;
-  });
-
   return (
     <div className="flex h-screen bg-slate-50/50">
       <Sidebar />
@@ -70,16 +122,32 @@ export default function Attendance() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 bg-slate-50 border border-border rounded-lg p-1">
                   <Input 
-                    type="date" 
-                    value={dateRange.start}
-                    onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    type="text"
+                    placeholder="dd/mm/yyyy"
+                    value={dateInput.start}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setDateInput(prev => ({ ...prev, start: value }));
+                      const parsed = parseDateInput(value);
+                      if (parsed) {
+                        setDateRange(prev => ({ ...prev, start: format(parsed, "yyyy-MM-dd") }));
+                      }
+                    }}
                     className="border-none bg-transparent h-8 w-36"
                   />
                   <span className="text-muted-foreground">-</span>
                   <Input 
-                    type="date" 
-                    value={dateRange.end}
-                    onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    type="text"
+                    placeholder="dd/mm/yyyy"
+                    value={dateInput.end}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setDateInput(prev => ({ ...prev, end: value }));
+                      const parsed = parseDateInput(value);
+                      if (parsed) {
+                        setDateRange(prev => ({ ...prev, end: format(parsed, "yyyy-MM-dd") }));
+                      }
+                    }}
                     className="border-none bg-transparent h-8 w-36"
                   />
                 </div>
@@ -108,15 +176,20 @@ export default function Attendance() {
                 </Select>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={handleProcess} disabled={processAttendance.isPending} className="gap-2">
-                  <RefreshCw className={cn("w-4 h-4", processAttendance.isPending && "animate-spin")} />
-                  معالجة الحضور
-                </Button>
-                <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleExport}>
-                  <Download className="w-4 h-4" />
-                  تصدير التقرير
-                </Button>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" onClick={handleProcess} disabled={processAttendance.isPending} className="gap-2">
+                    <RefreshCw className={cn("w-4 h-4", processAttendance.isPending && "animate-spin")} />
+                    معالجة الحضور
+                  </Button>
+                  <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={handleExport}>
+                    <Download className="w-4 h-4" />
+                    تصدير التقرير
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  يعيد حساب الحضور من البصمة للفترة المختارة
+                </span>
               </div>
             </div>
 
@@ -137,8 +210,10 @@ export default function Attendance() {
                 <tbody className="divide-y divide-border/50">
                   {isLoading ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center">جاري تحميل البيانات...</td></tr>
+                  ) : !dateRange.start || !dateRange.end ? (
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">يرجى تحديد الفترة أولاً.</td></tr>
                   ) : filteredRecords?.length === 0 ? (
-                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">لا توجد سجلات في هذه الفترة. جرّب معالجة الحضور بعد استيراد البصمة.</td></tr>
                   ) : (
                     filteredRecords?.map((record: any) => (
                       <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
@@ -168,9 +243,23 @@ export default function Attendance() {
                                 ))}
                               </div>
                             )}
+                            {record.fridayCompLeave && (
+                              <span className="text-[10px] text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full font-bold w-fit">
+                                إجازة بدل الجمعة
+                              </span>
+                            )}
                             {record.status === "Excused" && (
                               <span className="text-[10px] text-emerald-600 font-medium italic">إذن مسجل</span>
                             )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-fit h-7 text-[10px] px-2"
+                              disabled={toggleFridayCompLeave.isPending}
+                              onClick={() => toggleFridayCompLeave.mutate({ id: record.id, enabled: !record.fridayCompLeave })}
+                            >
+                              {record.fridayCompLeave ? "إلغاء بدل الجمعة" : "تفعيل بدل الجمعة"}
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -180,7 +269,7 @@ export default function Attendance() {
               </table>
             </div>
 
-            {totalPages > 1 && (
+            {limit > 0 && totalPages > 1 && (
               <div className="p-4 border-t border-border/50 flex items-center justify-center gap-2 bg-white">
                 <Button 
                   variant="outline" 
