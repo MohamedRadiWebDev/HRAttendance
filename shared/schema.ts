@@ -77,15 +77,10 @@ export const attendanceRecords = pgTable("attendance_records", {
   status: text("status"), // Present, Absent, Late, etc.
   penalties: jsonb("penalties"), // Array of penalty objects
   isOvernight: boolean("is_overnight").default(false),
-});
-
-export const auditLogs = pgTable("audit_logs", {
-  id: serial("id").primaryKey(),
-  employeeCode: text("employee_code").notNull(),
-  date: text("date").notNull(),
-  action: text("action").notNull(),
-  details: jsonb("details"),
-  timestamp: timestamp("timestamp").defaultNow(),
+  fridayCompLeave: boolean("friday_comp_leave").default(false),
+  fridayCompLeaveManual: boolean("friday_comp_leave_manual").default(false),
+  fridayCompLeaveNote: text("friday_comp_leave_note"),
+  fridayCompLeaveUpdatedBy: text("friday_comp_leave_updated_by"),
 });
 
 // Zod Schemas
