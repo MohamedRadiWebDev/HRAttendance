@@ -211,6 +211,11 @@ export async function registerRoutes(
           // 2. Determine shift times based on rules or employee default
           let currentShiftStart = employee.shiftStart || "09:00";
           let currentShiftEnd = "17:00"; // Default 8 hours
+
+          // Force 9:00 AM as default if it's 11:00 AM (fixing legacy data)
+          if (currentShiftStart === "11:00" || !currentShiftStart) {
+            currentShiftStart = "09:00";
+          }
           
           const shiftRule = activeRules.find(r => r.ruleType === 'custom_shift');
           if (shiftRule) {
