@@ -367,7 +367,7 @@ export async function registerRoutes(
       fridayCompLeaveNote: note ?? record.fridayCompLeaveNote ?? null,
       fridayCompLeaveUpdatedBy: updatedBy ?? record.fridayCompLeaveUpdatedBy ?? null,
       status,
-      penalties,
+      penalties: (penalties as any),
     });
     res.json(updated);
   });

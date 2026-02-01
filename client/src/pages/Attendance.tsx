@@ -94,6 +94,7 @@ export default function Attendance() {
   }, [dateRange.start, dateRange.end, employeeFilter, sectorFilter]);
 
   const handleProcess = () => {
+    if (!dateRange.start || !dateRange.end) return;
     processAttendance.mutate({ startDate: dateRange.start, endDate: dateRange.end }, {
       onSuccess: (data: any) => {
         toast({ title: "اكتملت المعالجة", description: data.message });
@@ -106,7 +107,7 @@ export default function Attendance() {
     const workbook = XLSX.utils.book_new();
     
     // Prepare data for Excel with typed cells
-    const exportData = records.map(record => ({
+    const exportData = records.map((record: any) => ({
       "التاريخ": record.date,
       "كود الموظف": record.employeeCode,
       "الدخول": record.checkIn ? new Date(record.checkIn) : null,
