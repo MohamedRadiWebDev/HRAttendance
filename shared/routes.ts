@@ -5,7 +5,8 @@ import {
   insertRuleSchema, specialRules,
   insertAdjustmentSchema, adjustments,
   insertAttendanceSchema, attendanceRecords,
-  insertPunchSchema, biometricPunches
+  insertPunchSchema, biometricPunches,
+  fridayPolicySettings
 } from './schema';
 
 export const errorSchemas = {

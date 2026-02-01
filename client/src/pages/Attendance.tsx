@@ -20,7 +20,7 @@ export default function Attendance() {
   const [employeeFilter, setEmployeeFilter] = useState("");
   
   const [page, setPage] = useState(1);
-  const limit = 50;
+  const limit = 0;
   
   const { data: recordsData, isLoading } = useAttendanceRecords(dateRange.start, dateRange.end, employeeFilter, page, limit, false);
   const records = recordsData?.data;
