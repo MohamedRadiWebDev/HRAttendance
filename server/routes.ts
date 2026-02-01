@@ -378,28 +378,9 @@ export async function registerRoutes(
     res.json(updated);
   });
 
-  // Import
+  // Import Punches endpoint disabled - using frontend-only flow
   app.post(api.import.punches.path, async (req, res) => {
-    try {
-      const punches = z.array(z.object({
-        employeeCode: z.string(),
-        punchDatetime: z.string(), // Local YYYY-MM-DDTHH:mm:ss (No Z!)
-      })).parse(req.body);
-      
-      const mappedPunches = punches.map(p => ({
-        employeeCode: p.employeeCode,
-        // Drizzle/PG timestamp expects a format. Appending Z only for parsing if needed but
-        // it's safer to just let the DB handle the string if it's already local ISO.
-        // However, standard JS Date parsing is best with Z for "as is" when digits are local.
-        punchDatetime: new Date(p.punchDatetime + "Z")
-      }));
-      
-      const result = await storage.createPunchesBulk(mappedPunches);
-      res.json({ message: "Imported punches", count: result.length });
-    } catch (err) {
-      console.error("Import Punches Error:", err);
-      res.status(400).json({ message: "Invalid punch data format" });
-    }
+    res.status(410).json({ message: "Endpoint disabled. Please use frontend import." });
   });
 
   app.post(api.import.employees.path, async (req, res) => {

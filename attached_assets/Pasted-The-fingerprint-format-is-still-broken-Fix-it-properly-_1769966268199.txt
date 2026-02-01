@@ -1,0 +1,63 @@
+The fingerprint format is still broken. Fix it properly.
+
+ROOT CAUSE
+You still convert Excel serial dates using JS Date objects and you still reference server/routes.ts with a Z suffix strategy.
+This reintroduces timezone shifts and date rollover bugs.
+
+NON-NEGOTIABLE RULES
+- NO backend, NO server/routes.ts, NO /api calls, NO DB logic.
+- NO 'Z' anywhere in fingerprint flow.
+- NO Date()/toISOString() for fingerprint grouping/comparison.
+- Source of truth must be: punchDate (YYYY-MM-DD) + punchTime (HH:mm:ss) + punchSeconds (0..86399).
+
+TASK
+Refactor fingerprint-parser.ts to eliminate JS Date usage for Excel serial conversion and guarantee stable wall-clock parsing.
+
+1) Excel serial parsing MUST use XLSX.SSF.parse_date_code
+- For numeric datetime cells, do NOT use Date.UTC, new Date(), or date-fns formatting.
+- Use:
+  const o = XLSX.SSF.parse_date_code(serialNumber)
+  // o has y,m,d,H,M,S
+- Build:
+  punchDate = `${y}-${MM}-${DD}`
+  punchTime = `${HH}:${mm}:${ss}`
+  punchSeconds = HH*3600 + mm*60 + ss
+  punchDateTimeKey = `${punchDate}T${punchTime}` (NO Z)
+
+2) Handle rounding edge case
+- If seconds computed becomes 86400 (can happen due to rounding), clamp:
+  - set to 86399 OR roll to next day using pure date math (prefer clamp to 23:59:59 to avoid date shifts)
+
+3) Text parsing MUST be dd/MM (Egypt) without timezone tricks
+- Keep date-fns parse, but do NOT convert parsed Date to ISO.
+- Extract only:
+  - punchDate via format(parsed, "yyyy-MM-dd")
+  - punchTime via format(parsed, "HH:mm:ss")
+  - punchSeconds via getHours/getMinutes/getSeconds
+- Ensure dd/MM is enforced (no MM/dd ambiguity).
+
+4) Downstream logic update (must)
+- Wherever punches are grouped or compared:
+  - Group key = employeeCode + punchDate
+  - Earliest/Latest = min/max punchSeconds
+- Do NOT use new Date(punchDateTimeKey) for comparisons.
+
+5) Remove any backend/Z logic entirely
+- Delete/ignore server/routes.ts changes related to punches.
+- The app is frontend-only; all punch data stays in memory.
+
+6) Regression Verification
+- Upload fingerprint file that contains midnight stamps like 00:06
+- Ensure punchDate remains the SAME day (no shift).
+- Ensure check-in/out per employee/day matches the version before Friday changes.
+- Ensure debug preview shows:
+  employeeCode | punchDate | punchTime | punchDateTimeKey | punchSeconds
+  and NO values include 'Z'.
+
+DELIVERABLE
+- Patch fingerprint-parser.ts using XLSX.SSF.parse_date_code
+- Patch any grouping/minmax logic to use punchDate + punchSeconds only
+- Add unit tests:
+  - Excel serial at 00:06 stays same date
+  - dd/MM text parsing
+  - Assert no 'Z' in parsed output

@@ -3,10 +3,10 @@ import { format, parse as parseDate, isValid } from "date-fns";
 
 export type ParsedPunch = {
   employeeCode: string;
-  punchDatetime: string;
   punchDate: string;
   punchTime: string;
-  punchDateTime: string;
+  punchDateTimeKey: string;
+  punchSeconds: number;
 };
 
 export type InvalidPunchRow = {
@@ -31,48 +31,59 @@ const DATE_FORMATS = [
   "yyyy-MM-dd HH:mm",
 ];
 
-const parseExcelDate = (value: unknown): { punchDate: string, punchTime: string, punchDateTime: string, punchSeconds: number } | null => {
+const parseExcelDate = (value: unknown): ParsedPunch | null => {
+  let y = 0, m = 0, d = 0, H = 0, M = 0, S = 0;
+
   if (typeof value === "number") {
-    // Excel serial math: datePart = floor(serial), timePart = serial - floor(serial)
-    const datePart = Math.floor(value);
-    const timePart = value - datePart;
-    
-    // Excel 1900 date system (Date.UTC(1899, 11, 30) handles the 1900 leap year bug correctly for serials)
-    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const d = new Date(excelEpoch.getTime() + datePart * 24 * 60 * 60 * 1000);
-    const punchDate = format(d, "yyyy-MM-dd");
-    
-    // timePart to seconds = round(timeFraction * 86400)
-    const punchSeconds = Math.round(timePart * 86400);
-    const hours = Math.floor(punchSeconds / 3600);
-    const minutes = Math.floor((punchSeconds % 3600) / 60);
-    const seconds = punchSeconds % 60;
-    const punchTime = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-    
-    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}`, punchSeconds };
-  }
-  
-  if (typeof value === "string") {
+    const ssf = (XLSX as any).SSF;
+    if (!ssf) return null;
+    const o = ssf.parse_date_code(value);
+    if (!o) return null;
+    y = o.y; m = o.m; d = o.d; H = o.H; M = o.M; S = Math.round(o.S || 0);
+  } else if (typeof value === "string") {
     const trimmed = value.trim();
+    let parsed: Date | null = null;
     for (const fmt of DATE_FORMATS) {
-      const parsed = parseDate(trimmed, fmt, new Date());
-      if (isValid(parsed)) {
-        const punchDate = format(parsed, "yyyy-MM-dd");
-        const punchTime = format(parsed, "HH:mm:ss");
-        const punchSeconds = parsed.getHours() * 3600 + parsed.getMinutes() * 60 + parsed.getSeconds();
-        return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}`, punchSeconds };
+      const p = parseDate(trimmed, fmt, new Date());
+      if (isValid(p)) {
+        parsed = p;
+        break;
       }
     }
-  }
-  
-  if (value instanceof Date && isValid(value)) {
-    const punchDate = format(value, "yyyy-MM-dd");
-    const punchTime = format(value, "HH:mm:ss");
-    const punchSeconds = value.getHours() * 3600 + value.getMinutes() * 60 + value.getSeconds();
-    return { punchDate, punchTime, punchDateTime: `${punchDate}T${punchTime}`, punchSeconds };
+    if (!parsed) return null;
+    y = parsed.getFullYear();
+    m = parsed.getMonth() + 1;
+    d = parsed.getDate();
+    H = parsed.getHours();
+    M = parsed.getMinutes();
+    S = parsed.getSeconds();
+  } else if (value instanceof Date && isValid(value)) {
+    y = value.getFullYear();
+    m = value.getMonth() + 1;
+    d = value.getDate();
+    H = value.getHours();
+    M = value.getMinutes();
+    S = value.getSeconds();
+  } else {
+    return null;
   }
 
-  return null;
+  // Handle rounding edge case (SSF might return S=60)
+  if (S >= 60) { S = 0; M += 1; }
+  if (M >= 60) { M = 0; H += 1; }
+  if (H >= 24) { H = 23; M = 59; S = 59; } // Clamp to same day
+
+  const punchDate = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const punchTime = `${String(H).padStart(2, "0")}:${String(M).padStart(2, "0")}:${String(S).padStart(2, "0")}`;
+  const punchSeconds = H * 3600 + M * 60 + S;
+
+  return {
+    employeeCode: "", // Filled later
+    punchDate,
+    punchTime,
+    punchDateTimeKey: `${punchDate}T${punchTime}`,
+    punchSeconds,
+  };
 };
 
 const normalizeRow = (headers: string[], values: unknown[]) => {
@@ -115,8 +126,7 @@ export const parseFingerprintWorksheet = (worksheet: XLSX.WorkSheet) => {
     const datetimeValue = getMappedValue(raw, "punchDatetime");
 
     const employeeCode = String(employeeCodeValue || "").trim();
-    const hasAnyValue = employeeCode || String(datetimeValue || "").trim();
-    if (!hasAnyValue) return;
+    if (!employeeCode && !datetimeValue) return;
 
     if (!employeeCode) {
       invalid.push({ rowIndex, reason: "كود الموظف مفقود", raw });
@@ -130,11 +140,8 @@ export const parseFingerprintWorksheet = (worksheet: XLSX.WorkSheet) => {
     }
 
     valid.push({
+      ...result,
       employeeCode,
-      punchDatetime: result.punchDateTime,
-      punchDate: result.punchDate,
-      punchTime: result.punchTime,
-      punchDateTime: result.punchDateTime,
     });
   });
 

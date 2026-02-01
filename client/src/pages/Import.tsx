@@ -94,25 +94,26 @@ export default function Import() {
         if (mapped.length === 0) throw new Error("لم يتم العثور على بيانات موظفين صالحة. تأكد من وجود أعمدة (كود، الاسم)");
         await importEmployees.mutateAsync(mapped);
       } else {
+        // Punches are strictly frontend-only, but we still use the hook for UI state
+        // if it exists, or we just process locally.
         const mapped = punchPreview.map(punch => ({
           employeeCode: punch.employeeCode,
-          punchDatetime: punch.punchDatetime,
+          punchDate: punch.punchDate,
+          punchTime: punch.punchTime,
+          punchSeconds: punch.punchSeconds,
+          punchDateTimeKey: punch.punchDateTimeKey,
         }));
 
         if (mapped.length === 0) throw new Error("لم يتم العثور على سجلات بصمة صالحة. تأكد من وجود أعمدة (كود، التاريخ_والوقت)");
-        await importPunches.mutateAsync(mapped);
+        
+        // Save to localStorage or in-memory state for the current session
+        const existingPunches = JSON.parse(localStorage.getItem("punches_session") || "[]");
+        const allPunches = [...existingPunches, ...mapped];
+        localStorage.setItem("punches_session", JSON.stringify(allPunches));
 
-        const punchDates = mapped
-          .map(p => new Date(p.punchDatetime))
-          .filter(date => !Number.isNaN(date.getTime()));
-
+        const punchDates = mapped.map(p => p.punchDate);
         if (punchDates.length > 0) {
-          const minDate = new Date(Math.min(...punchDates.map(date => date.getTime())));
-          const maxDate = new Date(Math.max(...punchDates.map(date => date.getTime())));
-          await processAttendance.mutateAsync({
-            startDate: format(minDate, "yyyy-MM-dd"),
-            endDate: format(maxDate, "yyyy-MM-dd"),
-          });
+          toast({ title: "تم الاستيراد", description: `تم استيراد ${mapped.length} سجل بصمة محلياً` });
         }
       }
       
