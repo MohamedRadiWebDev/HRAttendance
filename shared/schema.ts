@@ -90,6 +90,7 @@ export const insertTemplateSchema = createInsertSchema(excelTemplates).omit({ id
 export const insertRuleSchema = createInsertSchema(specialRules).omit({ id: true });
 export const insertAdjustmentSchema = createInsertSchema(adjustments).omit({ id: true });
 export const insertAttendanceSchema = createInsertSchema(attendanceRecords).omit({ id: true });
+export const insertFridayPolicySettingsSchema = createInsertSchema(fridayPolicySettings).omit({ id: true });
 
 // Types
 export type Employee = typeof employees.$inferSelect;
@@ -106,6 +107,8 @@ export type InsertAdjustment = z.infer<typeof insertAdjustmentSchema>;
 
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
 export type InsertAttendanceRecord = z.infer<typeof insertAttendanceSchema>;
+export type FridayPolicySettings = typeof fridayPolicySettings.$inferSelect;
+export type InsertFridayPolicySettings = z.infer<typeof insertFridayPolicySettingsSchema>;
 
 export type BiometricPunch = typeof biometricPunches.$inferSelect;
 export type InsertBiometricPunch = z.infer<typeof insertPunchSchema>;

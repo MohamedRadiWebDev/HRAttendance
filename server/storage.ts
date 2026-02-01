@@ -4,7 +4,9 @@ import {
   excelTemplates, type Template, type InsertTemplate,
   specialRules, type SpecialRule, type InsertSpecialRule,
   adjustments, type Adjustment, type InsertAdjustment,
-  attendanceRecords, type AttendanceRecord, type InsertAttendanceRecord
+  attendanceRecords, type AttendanceRecord, type InsertAttendanceRecord,
+  fridayPolicySettings, type FridayPolicySettings, type InsertFridayPolicySettings,
+  auditLogs
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, inArray, sql, desc } from "drizzle-orm";
@@ -51,6 +53,21 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private getDefaultFridayPolicySettings(): InsertFridayPolicySettings {
+    return {
+      includedSectors: ["التحصيل"],
+      monthlyMinimumFridaysRequired: 2,
+      maxCreditPerMonth: 3,
+      allowedOffDaysNextMonth: [1, 2, 3],
+      countBiometricAsWorkedFriday: true,
+      countMissionAsWorkedFriday: true,
+      countPermissionOnlyAsWorkedFriday: false,
+      countLeaveAsWorkedFriday: false,
+      officialHolidayFridayCounts: false,
+      weeklyRestFridayCounts: false,
+    };
+  }
+
   async wipeAllData(): Promise<void> {
     await db.delete(attendanceRecords);
     await db.delete(adjustments);
@@ -58,6 +75,8 @@ export class DatabaseStorage implements IStorage {
     await db.delete(biometricPunches);
     await db.delete(employees);
     await db.delete(excelTemplates);
+    await db.delete(fridayPolicySettings);
+    await db.delete(auditLogs);
   }
 
   // Employees

@@ -56,10 +56,15 @@ export default function Dashboard() {
   }, [dateRange]);
 
   const todayRecords = (attendanceData as any)?.data || [];
+  
+  // Calculate stats based on ALL employees to ensure accuracy
+  const totalEmployeesCount = allEmployees?.length || 0;
   const presentCount = todayRecords.filter((r: any) => r.status === "Present" || r.status === "Late").length;
   const lateCount = todayRecords.filter((r: any) => r.status === "Late").length;
-  const absentCount = todayRecords.filter((r: any) => r.status === "Absent").length;
   const excusedCount = todayRecords.filter((r: any) => r.status === "Excused").length;
+  
+  // Absent is total - (present + excused)
+  const absentCount = Math.max(0, totalEmployeesCount - presentCount - excusedCount);
 
   const stats = [
     { title: "إجمالي الموظفين", value: allEmployees?.length || 0, icon: Users, color: "blue" as const, trend: "", trendUp: true },
