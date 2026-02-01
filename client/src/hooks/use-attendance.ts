@@ -70,3 +70,20 @@ export function useImportPunches() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.attendance.list.path] }),
   });
 }
+
+export function useToggleFridayCompLeave() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, enabled }: { id: number; enabled: boolean }) => {
+      const url = api.attendance.fridayCompLeave.path.replace(":id", String(id));
+      const res = await fetch(url, {
+        method: api.attendance.fridayCompLeave.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) throw new Error("Failed to update Friday compensatory leave");
+      return api.attendance.fridayCompLeave.responses[200].parse(await res.json());
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.attendance.list.path] }),
+  });
+}

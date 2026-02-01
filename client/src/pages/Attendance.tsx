@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RefreshCw, Download, Search } from "lucide-react";
-import { useAttendanceRecords, useProcessAttendance } from "@/hooks/use-attendance";
+import { useAttendanceRecords, useProcessAttendance, useToggleFridayCompLeave } from "@/hooks/use-attendance";
 import { useEmployees } from "@/hooks/use-employees";
 import { format, startOfMonth, endOfMonth, parse } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ export default function Attendance() {
   const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
   const { data: employees } = useEmployees();
   const processAttendance = useProcessAttendance();
+  const toggleFridayCompLeave = useToggleFridayCompLeave();
   const { toast } = useToast();
 
   const parseDateInput = (value: string) => {
@@ -242,9 +243,23 @@ export default function Attendance() {
                                 ))}
                               </div>
                             )}
+                            {record.fridayCompLeave && (
+                              <span className="text-[10px] text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full font-bold w-fit">
+                                إجازة بدل الجمعة
+                              </span>
+                            )}
                             {record.status === "Excused" && (
                               <span className="text-[10px] text-emerald-600 font-medium italic">إذن مسجل</span>
                             )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-fit h-7 text-[10px] px-2"
+                              disabled={toggleFridayCompLeave.isPending}
+                              onClick={() => toggleFridayCompLeave.mutate({ id: record.id, enabled: !record.fridayCompLeave })}
+                            >
+                              {record.fridayCompLeave ? "إلغاء بدل الجمعة" : "تفعيل بدل الجمعة"}
+                            </Button>
                           </div>
                         </td>
                       </tr>
