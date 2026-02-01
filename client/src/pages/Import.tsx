@@ -9,6 +9,7 @@ import { useImportEmployees, useImportPunches } from "@/hooks/use-employees";
 import { useProcessAttendance } from "@/hooks/use-attendance";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import { parseFingerprintWorksheet, type InvalidPunchRow, type ParsedPunch } from "@/lib/fingerprint-parser";
 
 export default function Import() {
   const { toast } = useToast();
@@ -18,6 +19,8 @@ export default function Import() {
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState("employees");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [punchPreview, setPunchPreview] = useState<ParsedPunch[]>([]);
+  const [punchInvalidRows, setPunchInvalidRows] = useState<InvalidPunchRow[]>([]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -39,6 +42,15 @@ export default function Import() {
           return;
         }
         
+        if (activeTab === "punches") {
+          const parsed = parseFingerprintWorksheet(ws);
+          setPunchPreview(parsed.valid);
+          setPunchInvalidRows(parsed.invalid);
+          setPreviewData(parsed.valid);
+          toast({ title: "تم قراءة الملف", description: `سجلات صحيحة: ${parsed.valid.length} | غير صالحة: ${parsed.invalid.length}` });
+          return;
+        }
+
         setPreviewData(data);
         toast({ title: "تم قراءة الملف", description: `تم العثور على ${data.length} سجل` });
       } catch (err: any) {
@@ -49,7 +61,8 @@ export default function Import() {
   };
 
   const handleImport = async () => {
-    if (previewData.length === 0) return;
+    if (previewData.length === 0 && activeTab !== "punches") return;
+    if (activeTab === "punches" && punchPreview.length === 0) return;
     setIsProcessing(true);
     
     try {
@@ -81,39 +94,12 @@ export default function Import() {
         if (mapped.length === 0) throw new Error("لم يتم العثور على بيانات موظفين صالحة. تأكد من وجود أعمدة (كود، الاسم)");
         await importEmployees.mutateAsync(mapped);
       } else {
-        const mapped = previewData.map((row: any) => {
-          // Try to find employee code
-          const employeeCode = String(row['كود'] || row['ID'] || row['Code'] || row['الكود'] || row['id'] || row['Employee ID'] || "");
-          
-          // Try to find date/time
-          const rawDate = row['التاريخ_والوقت'] || row['Punch Datetime'] || row['Clock In'] || row['Date'] || row['Time'] || row['date'] || row['time'] || row['التاريخ'] || row['الوقت'];
-          
-          let punchDatetime: Date;
-          if (rawDate instanceof Date) {
-            punchDatetime = rawDate;
-          } else if (typeof rawDate === 'string') {
-            // Handle common DD/MM/YYYY format if new Date() fails
-            const parts = rawDate.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2})(\s+AM|\s+PM)?/i);
-            if (parts) {
-              let [_, day, month, year, hours, minutes, ampm] = parts;
-              let h = parseInt(hours);
-              if (ampm && ampm.trim().toUpperCase() === 'PM' && h < 12) h += 12;
-              if (ampm && ampm.trim().toUpperCase() === 'AM' && h === 12) h = 0;
-              punchDatetime = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), h, parseInt(minutes));
-            } else {
-              punchDatetime = new Date(rawDate);
-            }
-          } else {
-            punchDatetime = new Date(rawDate);
-          }
-          
-          return {
-            employeeCode,
-            punchDatetime: format(punchDatetime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
-          };
-        }).filter(p => p.employeeCode && p.punchDatetime && p.punchDatetime !== "Invalid Date");
+        const mapped = punchPreview.map(punch => ({
+          employeeCode: punch.employeeCode,
+          punchDatetime: punch.punchDatetime,
+        }));
 
-        if (mapped.length === 0) throw new Error("لم يتم العثور على سجلات بصمة صالحة. تأكد من وجود أعمدة (ID, Clock In)");
+        if (mapped.length === 0) throw new Error("لم يتم العثور على سجلات بصمة صالحة. تأكد من وجود أعمدة (كود، التاريخ_والوقت)");
         await importPunches.mutateAsync(mapped);
 
         const punchDates = mapped
@@ -132,6 +118,8 @@ export default function Import() {
       
       toast({ title: "نجاح", description: "تم استيراد البيانات بنجاح" });
       setPreviewData([]);
+      setPunchPreview([]);
+      setPunchInvalidRows([]);
     } catch (err: any) {
       toast({ title: "فشل الاستيراد", description: err.message, variant: "destructive" });
     } finally {
@@ -154,7 +142,7 @@ export default function Import() {
               <h3 className="text-xl font-bold font-display mb-2">رفع ملف إكسل</h3>
               <p className="text-muted-foreground mb-8">قم بسحب وإفلات الملف هنا، أو انقر للاختيار من جهازك</p>
               
-              <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setPreviewData([]); }} className="w-full max-w-md mx-auto mb-8">
+              <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setPreviewData([]); setPunchPreview([]); setPunchInvalidRows([]); }} className="w-full max-w-md mx-auto mb-8">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="employees">بيانات الموظفين</TabsTrigger>
                   <TabsTrigger value="punches">سجلات البصمة</TabsTrigger>
@@ -217,12 +205,32 @@ export default function Import() {
               </div>
             )}
             
+            {activeTab === "punches" && punchInvalidRows.length > 0 && (
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-3 items-start">
+                <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-amber-800 mb-1">Import Validation</h4>
+                  <p className="text-sm text-amber-700 mb-2">تم تجاهل الصفوف غير الصالحة التالية:</p>
+                  <ul className="text-sm text-amber-700 list-disc list-inside space-y-1">
+                    {punchInvalidRows.slice(0, 10).map((row) => (
+                      <li key={row.rowIndex}>
+                        صف {row.rowIndex}: {row.reason}
+                      </li>
+                    ))}
+                  </ul>
+                  {punchInvalidRows.length > 10 && (
+                    <p className="text-xs text-amber-700 mt-2">... والمزيد ({punchInvalidRows.length - 10} صف)</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3 items-start">
               <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
               <div>
                 <h4 className="font-bold text-blue-800 mb-1">تعليمات الاستيراد</h4>
                 <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
-                  <li>تأكد من مطابقة أسماء الأعمدة (ID, Name, Date, Clock In, Clock Out)</li>
+                  <li>سجلات البصمة تستخدم الأعمدة: كود، التاريخ_والوقت</li>
                   <li>صيغة التاريخ والوقت يجب أن تكون واضحة للنظام</li>
                   <li>الملفات المدعومة هي .xlsx و .xls فقط</li>
                 </ul>

@@ -83,20 +83,6 @@ export const attendanceRecords = pgTable("attendance_records", {
   fridayCompLeaveUpdatedBy: text("friday_comp_leave_updated_by"),
 });
 
-export const fridayPolicySettings = pgTable("friday_policy_settings", {
-  id: serial("id").primaryKey(),
-  includedSectors: jsonb("included_sectors").notNull(),
-  monthlyMinimumFridaysRequired: integer("monthly_minimum_fridays_required").notNull().default(2),
-  maxCreditPerMonth: integer("max_credit_per_month").notNull().default(3),
-  allowedOffDaysNextMonth: jsonb("allowed_off_days_next_month").notNull(),
-  countBiometricAsWorkedFriday: boolean("count_biometric_as_worked_friday").notNull().default(true),
-  countMissionAsWorkedFriday: boolean("count_mission_as_worked_friday").notNull().default(true),
-  countPermissionOnlyAsWorkedFriday: boolean("count_permission_only_as_worked_friday").notNull().default(false),
-  countLeaveAsWorkedFriday: boolean("count_leave_as_worked_friday").notNull().default(false),
-  officialHolidayFridayCounts: boolean("official_holiday_friday_counts").notNull().default(false),
-  weeklyRestFridayCounts: boolean("weekly_rest_friday_counts").notNull().default(false),
-});
-
 // Zod Schemas
 export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true });
 export const insertPunchSchema = createInsertSchema(biometricPunches).omit({ id: true });
