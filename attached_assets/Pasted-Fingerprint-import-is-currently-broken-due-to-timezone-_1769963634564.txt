@@ -1,0 +1,64 @@
+Fingerprint import is currently broken due to timezone conversion.
+
+EVIDENCE
+Parsed rows show punchDatetime in UTC (ending with Z) and punchDate shifts by +1 day:
+Example:
+- punchDatetime: 2025-12-15T22:06:00.000Z
+- punchDate: 2025-12-16
+This indicates the parser converts Excel/local datetime to UTC and then derives date/time, causing day rollover.
+
+TASK
+Fix fingerprint parsing so that Excel datetimes are treated as "local wall-clock" times and DO NOT shift dates due to timezone.
+
+NON-NEGOTIABLE REQUIREMENTS
+1) Never store punchDatetime as a UTC-Z string.
+2) Preserve the exact date+time as appears in Excel:
+   - If Excel shows 16/12/2025 12:06 AM then internal representation must keep:
+     punchDate = 2025-12-16
+     punchTime = 00:06:00
+     and punchDatetime (if stored) must be a "local" datetime, not UTC.
+
+3) Parsing Rules
+A) If the cell is an Excel serial datetime number:
+   - Convert using Excel serial -> local date/time components WITHOUT timezone shifting.
+   - Derive components via serial math:
+     - datePart = floor(serial)
+     - timePart = serial - floor(serial)
+     - Convert datePart to YYYY-MM-DD using Excel epoch rules
+     - Convert timePart to HH:mm:ss by multiplying by 24*60*60
+   - Build punchDate and punchTime from these components.
+
+B) If the cell is text datetime (e.g. "16/12/2025 12:06 AM"):
+   - Parse as dd/MM/yyyy format (Egypt style), not MM/dd
+   - Produce punchDate and punchTime exactly as written.
+
+4) Data Model Output
+For each punch row store:
+- employeeCode (string)
+- punchDate (YYYY-MM-DD)  [PRIMARY for grouping]
+- punchTime ("HH:mm:ss")  [PRIMARY for sorting within day]
+- punchDateTimeKey ("YYYY-MM-DDTHH:mm:ss") as a plain local key string (NO timezone / NO Z)
+Optionally:
+- punchTimestampMs computed from punchDateTimeKey assuming local time, used only for comparisons.
+But do NOT output ISO with Z.
+
+5) Grouping & Min/Max
+- When computing earliest/latest per employee/day:
+  - compare using punchTime seconds OR punchTimestampMs built from local key
+  - NEVER compare ISO strings with Z.
+
+6) UI + Export
+- Display and export must use punchDate/punchTime without any timezone adjustments.
+- Excel export should write times as real Excel time cells if the rest of the system expects that.
+
+7) Verification
+Using the provided fingerprint file:
+- Ensure no punchDate shifts to the next day due to UTC conversion.
+- A punch at 00:06 stays on the same date in punchDate.
+- Check-in/out per day match previous version behavior.
+
+DELIVERABLE
+Patch the fingerprint parser to remove UTC conversion and preserve Excel/local wall-clock datetime.
+Add unit tests for:
+- Excel serial datetime at midnight cases (00:xx) to ensure no day rollover
+- dd/MM text datetime parsing

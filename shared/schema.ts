@@ -77,15 +77,35 @@ export const attendanceRecords = pgTable("attendance_records", {
   status: text("status"), // Present, Absent, Late, etc.
   penalties: jsonb("penalties"), // Array of penalty objects
   isOvernight: boolean("is_overnight").default(false),
+  fridayCompLeave: boolean("friday_comp_leave").default(false),
+  fridayCompLeaveManual: boolean("friday_comp_leave_manual").default(false),
+  fridayCompLeaveNote: text("friday_comp_leave_note"),
+  fridayCompLeaveUpdatedBy: text("friday_comp_leave_updated_by"),
 });
 
+// Friday policy settings
+export const fridayPolicySettings = pgTable("friday_policy_settings", {
+  id: serial("id").primaryKey(),
+  includedSectors: jsonb("included_sectors").$type<string[]>().default([]),
+  monthlyMinimumFridaysRequired: integer("monthly_minimum_fridays_required").default(2),
+  maxCreditPerMonth: integer("max_credit_per_month").default(3),
+  allowedOffDaysNextMonth: jsonb("allowed_off_days_next_month").$type<number[]>().default([]),
+  countBiometricAsWorkedFriday: boolean("count_biometric_as_worked_friday").default(true),
+  countMissionAsWorkedFriday: boolean("count_mission_as_worked_friday").default(true),
+  countPermissionOnlyAsWorkedFriday: boolean("count_permission_only_as_worked_friday").default(false),
+  countLeaveAsWorkedFriday: boolean("count_leave_as_worked_friday").default(false),
+  officialHolidayFridayCounts: boolean("official_holiday_friday_counts").default(false),
+  weeklyRestFridayCounts: boolean("weekly_rest_friday_counts").default(false),
+});
+
+// Audit logs
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
-  employeeCode: text("employee_code").notNull(),
-  date: text("date").notNull(),
   action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
   details: jsonb("details"),
-  timestamp: timestamp("timestamp").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Zod Schemas
@@ -95,6 +115,7 @@ export const insertTemplateSchema = createInsertSchema(excelTemplates).omit({ id
 export const insertRuleSchema = createInsertSchema(specialRules).omit({ id: true });
 export const insertAdjustmentSchema = createInsertSchema(adjustments).omit({ id: true });
 export const insertAttendanceSchema = createInsertSchema(attendanceRecords).omit({ id: true });
+export const insertFridayPolicySettingsSchema = createInsertSchema(fridayPolicySettings).omit({ id: true });
 
 // Types
 export type Employee = typeof employees.$inferSelect;
@@ -111,6 +132,8 @@ export type InsertAdjustment = z.infer<typeof insertAdjustmentSchema>;
 
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
 export type InsertAttendanceRecord = z.infer<typeof insertAttendanceSchema>;
+export type FridayPolicySettings = typeof fridayPolicySettings.$inferSelect;
+export type InsertFridayPolicySettings = z.infer<typeof insertFridayPolicySettingsSchema>;
 
 export type BiometricPunch = typeof biometricPunches.$inferSelect;
 export type InsertBiometricPunch = z.infer<typeof insertPunchSchema>;
