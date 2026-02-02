@@ -43,7 +43,7 @@ export default function Dashboard() {
     dateRange.end,
     "",
     1,
-    5000,
+    0,
     false
   );
 
@@ -67,7 +67,7 @@ export default function Dashboard() {
   const absentCount = Math.max(0, totalEmployeesCount - presentCount - excusedCount);
 
   const stats = [
-    { title: "إجمالي الموظفين", value: totalEmployeesCount, icon: Users, color: "blue" as const, trend: "", trendUp: true },
+    { title: "إجمالي الموظفين", value: allEmployees?.length || 0, icon: Users, color: "blue" as const, trend: "", trendUp: true },
     { title: "حضور الفترة", value: presentCount, icon: CheckCircle, color: "green" as const, trend: "", trendUp: true },
     { title: "تأخيرات الفترة", value: lateCount, icon: Clock, color: "orange" as const, trend: "", trendUp: true },
     { title: "غياب الفترة", value: absentCount, icon: AlertTriangle, color: "red" as const, trend: "", trendUp: false },

@@ -4,7 +4,9 @@ import {
   excelTemplates, type Template, type InsertTemplate,
   specialRules, type SpecialRule, type InsertSpecialRule,
   adjustments, type Adjustment, type InsertAdjustment,
-  attendanceRecords, type AttendanceRecord, type InsertAttendanceRecord
+  attendanceRecords, type AttendanceRecord, type InsertAttendanceRecord,
+  fridayPolicySettings, type FridayPolicySettings, type InsertFridayPolicySettings,
+  auditLogs
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, inArray, sql, desc } from "drizzle-orm";
@@ -37,8 +39,10 @@ export interface IStorage {
 
   // Attendance
   getAttendance(startDate: string, endDate: string, employeeCode?: string, limit?: number, offset?: number): Promise<{ data: AttendanceRecord[], total: number }>;
+  getAttendanceByRange(startDate: string, endDate: string): Promise<AttendanceRecord[]>;
   createAttendanceRecord(record: InsertAttendanceRecord): Promise<AttendanceRecord>;
   updateAttendanceRecord(id: number, record: Partial<InsertAttendanceRecord>): Promise<AttendanceRecord>;
+  getAttendanceRecord(id: number): Promise<AttendanceRecord | undefined>;
   
   // Bulk operations for import
   createEmployeesBulk(employees: InsertEmployee[]): Promise<Employee[]>;
@@ -49,6 +53,21 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private getDefaultFridayPolicySettings(): InsertFridayPolicySettings {
+    return {
+      includedSectors: ["التحصيل"],
+      monthlyMinimumFridaysRequired: 2,
+      maxCreditPerMonth: 3,
+      allowedOffDaysNextMonth: [1, 2, 3],
+      countBiometricAsWorkedFriday: true,
+      countMissionAsWorkedFriday: true,
+      countPermissionOnlyAsWorkedFriday: false,
+      countLeaveAsWorkedFriday: false,
+      officialHolidayFridayCounts: false,
+      weeklyRestFridayCounts: false,
+    };
+  }
+
   async wipeAllData(): Promise<void> {
     await db.delete(attendanceRecords);
     await db.delete(adjustments);
@@ -56,6 +75,8 @@ export class DatabaseStorage implements IStorage {
     await db.delete(biometricPunches);
     await db.delete(employees);
     await db.delete(excelTemplates);
+    await db.delete(fridayPolicySettings);
+    await db.delete(auditLogs);
   }
 
   // Employees
@@ -166,18 +187,28 @@ export class DatabaseStorage implements IStorage {
       count: sql<number>`count(*)` 
     }).from(attendanceRecords).where(and(...conditions));
 
-    let dataQuery = db.select()
+    const baseQuery = db.select()
       .from(attendanceRecords)
       .where(and(...conditions))
       .orderBy(desc(attendanceRecords.date), desc(attendanceRecords.id));
     
-    if (limit > 0) {
-      dataQuery = dataQuery.limit(limit).offset(offset);
-    }
-
-    const data = await dataQuery;
+    const data = limit > 0 
+      ? await baseQuery.limit(limit).offset(offset)
+      : await baseQuery;
 
     return { data, total: Number(countResult?.count || 0) };
+  }
+
+  async getAttendanceByRange(startDate: string, endDate: string): Promise<AttendanceRecord[]> {
+    return await db
+      .select()
+      .from(attendanceRecords)
+      .where(and(gte(attendanceRecords.date, startDate), lte(attendanceRecords.date, endDate)));
+  }
+
+  async getAttendanceRecord(id: number): Promise<AttendanceRecord | undefined> {
+    const [record] = await db.select().from(attendanceRecords).where(eq(attendanceRecords.id, id));
+    return record;
   }
 
   async createAttendanceRecord(insertRecord: InsertAttendanceRecord): Promise<AttendanceRecord> {
@@ -207,6 +238,7 @@ export class DatabaseStorage implements IStorage {
     const [record] = await db.update(attendanceRecords).set(update).where(eq(attendanceRecords.id, id)).returning();
     return record;
   }
+
 
   // Bulk
   async createEmployeesBulk(insertEmployees: InsertEmployee[]): Promise<Employee[]> {
